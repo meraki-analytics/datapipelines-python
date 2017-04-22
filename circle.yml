@@ -4,8 +4,10 @@ machine:
 
 dependencies:
   pre:
-    - pip install flake8
+    - pip install -U flake8 pytest
 
 test:
   pre:
     - flake8
+  override:
+    - pytest
