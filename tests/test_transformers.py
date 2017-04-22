@@ -7,25 +7,29 @@ T = TypeVar("T")
 F = TypeVar("F")
 
 
+#############################################
+# Create simple DataTransformer for testing #
+#############################################
+
 class SimpleDataTransformer(DataTransformer):
     @DataTransformer.dispatch
     def transform(self, target_type: Type[T], value: F, context: PipelineContext = None) -> T:
         pass
 
     @transform.register(float, int)
-    def float_to_int(self, value, context: PipelineContext = None):
+    def float_to_int(self, value: float, context: PipelineContext = None) -> int:
         return int(value)
 
     @transform.register(int, float)
-    def int_to_float(self, value, context: PipelineContext = None):
+    def int_to_float(self, value: int, context: PipelineContext = None) -> float:
         return float(value)
 
     @transform.register(str, int)
-    def str_to_int(self, value, context: PipelineContext = None):
+    def str_to_int(self, value: str, context: PipelineContext = None) -> int:
         return int(value)
 
     @transform.register(str, float)
-    def str_to_float(self, value, context: PipelineContext = None):
+    def str_to_float(self, value: str, context: PipelineContext = None) -> float:
         return float(value)
 
 

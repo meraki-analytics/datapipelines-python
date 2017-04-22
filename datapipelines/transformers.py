@@ -16,7 +16,7 @@ class DataTransformer(ABC):
     @property
     def transforms(self) -> Mapping[Type, Collection[Type]]:
         try:
-            return getattr(self.__class__, "transform").__transforms
+            return getattr(self.__class__, "transform")._transforms
         except AttributeError:
             return {}
 
@@ -51,6 +51,6 @@ class DataTransformer(ABC):
             return dispatcher.register(TypePair[from_type, to_type])
 
         wrapper.register = register
-        wrapper.__transforms = transforms
+        wrapper._transforms = transforms
         update_wrapper(wrapper, method)
         return wrapper

@@ -14,7 +14,7 @@ VALUE_KEY = "value"
 COUNT_KEY = "count"
 
 VALUES_COUNT = 100
-VALUES_MAX = 10000
+VALUES_MAX = 100000000
 
 
 class SimpleWildcardDataSource(DataSource):

@@ -11,11 +11,11 @@ from datapipelines import DataSink, PipelineContext
 T = TypeVar("T")
 
 VALUES_COUNT = 100
-VALUES_MAX = 10000
+VALUES_MAX = 100000000
 
 
 class SimpleWildcardDataSink(DataSink):
-    def __init__(self):
+    def __init__(self) -> None:
         self.items = {}
 
     def put(self, type: Type[T], item: T, context: PipelineContext = None) -> None:
@@ -39,7 +39,7 @@ class SimpleWildcardDataSink(DataSink):
 
 
 class SimpleDataSink(DataSink):
-    def __init__(self):
+    def __init__(self) -> None:
         self.items = {
             int: set(),
             float: set()
@@ -54,20 +54,20 @@ class SimpleDataSink(DataSink):
         pass
 
     @put.register(int)
-    def put_int(self, item, context: PipelineContext = None) -> None:
+    def put_int(self, item: int, context: PipelineContext = None) -> None:
         self.items[int].add(item)
 
     @put_many.register(int)
-    def put_many_int(self, items, context: PipelineContext = None) -> None:
+    def put_many_int(self, items: Iterable[int], context: PipelineContext = None) -> None:
         for item in items:
             self.items[int].add(item)
 
     @put.register(float)
-    def put_float(self, item, context: PipelineContext = None) -> None:
+    def put_float(self, item: float, context: PipelineContext = None) -> None:
         self.items[float].add(item)
 
     @put_many.register(float)
-    def put_many_float(self, items, context: PipelineContext = None) -> None:
+    def put_many_float(self, items: Iterable[float], context: PipelineContext = None) -> None:
         for item in items:
             self.items[float].add(item)
 

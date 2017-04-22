@@ -17,12 +17,12 @@ class DataSource(ABC):
         types = set()
         any_dispatch = False
         try:
-            types.update(getattr(self.__class__, "get").__provides)
+            types.update(getattr(self.__class__, "get")._provides)
             any_dispatch = True
         except AttributeError:
             pass
         try:
-            types.update(getattr(self.__class__, "get_many").__provides)
+            types.update(getattr(self.__class__, "get_many")._provides)
             any_dispatch = True
         except AttributeError:
             pass
@@ -53,6 +53,6 @@ class DataSource(ABC):
             return dispatcher.register(type)
 
         wrapper.register = register
-        wrapper.__provides = provides
+        wrapper._provides = provides
         update_wrapper(wrapper, method)
         return wrapper

@@ -86,7 +86,7 @@ T = TypeVar("T")
 S = TypeVar("S")
 
 
-def _pairwise(iterable: Iterable[Any]) -> Iterable[Tuple[Any, Any]]:
+def _pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
     a, b = tee(iterable)
     next(b, None)
     return zip(a, b)
@@ -104,22 +104,22 @@ def _transform(transformer_chain: Sequence[Tuple[DataTransformer, Type]], data: 
 
 
 class _SinkHandler(Generic[S, T]):
-    def __init__(self, sink: DataSink, source_type: Type[S], transform: Callable[[T], S]) -> None:
+    def __init__(self, sink: DataSink, store_type: Type[S], transform: Callable[[T], S]) -> None:
         self._sink = sink
-        self._source_type = source_type
+        self._store_type = store_type
         self._transform = transform
 
     def put(self, item: T, context: PipelineContext = None) -> None:
         LOGGER.info("Converting item \"{item}\" for sink \"{sink}\"".format(item=item, sink=self._sink))
         item = self._transform(data=item, context=context)
         LOGGER.info("Puting item \"{item}\" into sink \"{sink}\"".format(item=item, sink=self._sink))
-        self._sink.put(self._source_type, item, context)
+        self._sink.put(self._store_type, item, context)
 
     def put_many(self, items: Iterable[T], context: PipelineContext = None) -> None:
         LOGGER.info("Creating transform generator for items \"{items}\" for sink \"{sink}\"".format(items=items, sink=self._sink))
         transform_generator = (self._transform(data=item, context=context) for item in items)
         LOGGER.info("Putting transform generator for items \"{items}\" into sink \"{sink}\"".format(items=items, sink=self._sink))
-        self._sink.put_many(self._source_type, transform_generator, context)
+        self._sink.put_many(self._store_type, transform_generator, context)
 
 
 class _SourceHandler(Generic[S, T]):
@@ -147,7 +147,7 @@ class _SourceHandler(Generic[S, T]):
 
         return result
 
-    def __get_many_generator(self, result: Iterable[S], context: PipelineContext = None) -> Generator[T, None, None]:
+    def _get_many_generator(self, result: Iterable[S], context: PipelineContext = None) -> Generator[T, None, None]:
         for item in result:
             LOGGER.info("Sending item \"{item}\" to sinks before converting".format(item=item))
             for sink in self._before_transform:
@@ -184,7 +184,7 @@ class _SourceHandler(Generic[S, T]):
             return result
         else:
             LOGGER.info("Streaming get_many request. Returning result generator for results \"{result}\"".format(result=result))
-            return self.__get_many_generator(result)
+            return self._get_many_generator(result)
 
 
 class DataPipeline(object):
@@ -208,30 +208,36 @@ class DataPipeline(object):
 
         LOGGER.info("Beginning construction of type graph")
         # noinspection PyTypeChecker
-        self.__type_graph = _build_type_graph(sources, sinks, transformers)
+        self._type_graph = _build_type_graph(sources, sinks, transformers)
         LOGGER.info("Completed construction of type graph")
-        self.__sources = targets
-        self.__sinks = sinks
-        self.__get_types = {}
-        self.__put_types = {}
+        self._sources = targets
+        self._sinks = sinks
+        self._get_types = {}
+        self._put_types = {}
 
-    def __transform(self, source_type: Type[S], target_type: Type[T]) -> Tuple[Callable[[S], T], int]:
-        LOGGER.info("Searching type graph for shortest path from \"{source_type}\" to \"{target_type}\"".format(source_type=source_type.__name__, target_type=target_type.__name__))
-        path = dijkstra_path(self.__type_graph, source=source_type, target=target_type)
-        LOGGER.info("Found a path from \"{source_type}\" to \"{target_type}\"".format(source_type=source_type.__name__, target_type=target_type.__name__))
+    def _transform(self, source_type: Type[S], target_type: Type[T]) -> Tuple[Callable[[S], T], int]:
+        try:
+            LOGGER.info("Searching type graph for shortest path from \"{source_type}\" to \"{target_type}\"".format(source_type=source_type.__name__, target_type=target_type.__name__))
+            path = dijkstra_path(self._type_graph, source=source_type, target=target_type, weight="cost")
+            LOGGER.info("Found a path from \"{source_type}\" to \"{target_type}\"".format(source_type=source_type.__name__, target_type=target_type.__name__))
+        except (KeyError, NetworkXNoPath):
+            raise NoConversionError("Pipeline can't convert \"{source_type}\" to \"{target_type}\"".format(source_type=source_type, target_type=target_type))
 
         LOGGER.info("Building transformer chain from \"{source_type}\" to \"{target_type}\"".format(source_type=source_type.__name__, target_type=target_type.__name__))
         chain = []
         cost = 0
         for source, target in _pairwise(path):
-            transformer = self.__type_graph.edge[source][target][_TRANSFORMER]
+            transformer = self._type_graph.edge[source][target][_TRANSFORMER]
             chain.append((transformer, target))
             cost += transformer.cost
         LOGGER.info("Built transformer chain from \"{source_type}\" to \"{target_type}\"".format(source_type=source_type.__name__, target_type=target_type.__name__))
 
+        if not chain:
+            return _identity, 0
+
         return partial(_transform, transformer_chain=chain), cost
 
-    def __sink_handler(self, sink: DataSink, *target_types: Type) -> Tuple[_SinkHandler, int]:
+    def _sink_handler(self, sink: DataSink, *target_types: Type) -> Tuple[_SinkHandler, int]:
         for index, target_type in enumerate(target_types):
             if TYPE_WILDCARD is sink.accepts or target_type in sink.accepts:
                 LOGGER.info("Sink \"{sink}\" accepts \"{target_type}\" directly".format(sink=sink, target_type=target_type.__name__))
@@ -241,6 +247,7 @@ class DataPipeline(object):
         transform = None
         cost = _MAX_TRANSFORM_COST
         type_index = -1
+        accept_type = None
 
         accepts = sink.accepts  # type: Collection[Type]
         for index, target_type in enumerate(target_types):
@@ -248,12 +255,13 @@ class DataPipeline(object):
             for accepted_type in accepts:
                 try:
                     # noinspection PyTypeChecker
-                    t, c = self.__transform(target_type, accepted_type)
+                    t, c = self._transform(target_type, accepted_type)
                     LOGGER.info("Found a transformer chain from \"{target_type}\" to \"{accepted_type}\" at cost {cost}".format(target_type=target_type.__name__, accepted_type=accepted_type.__name__, cost=c))
                     if c < cost:
                         transform = t
                         cost = c
                         type_index = index
+                        accept_type = accepted_type
                 except NetworkXNoPath:
                     pass
 
@@ -263,9 +271,9 @@ class DataPipeline(object):
 
         LOGGER.info("Taking cheapest transformer chain for sink \"{sink}\" (from \"{target_type}\") at cost {cost}".format(sink=sink, target_type=target_types[type_index].__name__, cost=cost))
 
-        return _SinkHandler(sink, target_types[type_index], transform), type_index
+        return _SinkHandler(sink, accept_type, transform), type_index
 
-    def __source_handler(self, source: DataSource, sinks: Collection[DataSink], target_type: Type[T]) -> _SourceHandler:
+    def _source_handler(self, source: DataSource, sinks: Collection[DataSink], target_type: Type[T]) -> _SourceHandler:
         if TYPE_WILDCARD is source.provides or target_type in source.provides:
             LOGGER.info("Source \"{source}\" provides \"{target_type}\" directly".format(source=source, target_type=target_type.__name__))
             transform = _identity
@@ -278,7 +286,7 @@ class DataPipeline(object):
             LOGGER.info("Attempting to find a transformer chain to \"{target_type}\" from a type source \"{source}\" provides".format(target_type=target_type.__name__, source=source))
             for provided_type in source.provides:
                 try:
-                    t, c = self.__transform(provided_type, target_type)
+                    t, c = self._transform(provided_type, target_type)
                     LOGGER.info("Found a transformer chain from \"{provided_type}\" to \"{target_type}\" at cost {cost}".format(provided_type=provided_type.__name__, target_type=target_type.__name__, cost=c))
                     if c < cost:
                         transform = t
@@ -296,7 +304,8 @@ class DataPipeline(object):
         target_sinks = {}
         for sink in sinks:
             try:
-                handler, do_transform = self.__sink_handler(sink, source_type, target_type)
+                handler, index = self._sink_handler(sink, source_type, target_type)
+                do_transform = index == 1
                 target_sinks[handler] = do_transform
             except NoConversionError:
                 pass
@@ -304,12 +313,12 @@ class DataPipeline(object):
 
         return _SourceHandler(source, source_type, transform, target_sinks)
 
-    def __get_handlers(self, type: Type[T]) -> List[_SourceHandler]:
+    def _get_handlers(self, type: Type[T]) -> List[_SourceHandler]:
         handlers = []  # type: List[_SourceHandler]
 
-        for source, sinks in self.__sources:
+        for source, sinks in self._sources:
             try:
-                handler = self.__source_handler(source, sinks, type)
+                handler = self._source_handler(source, sinks, type)
                 handlers.append(handler)
             except NoConversionError:
                 pass
@@ -319,12 +328,12 @@ class DataPipeline(object):
 
         return handlers
 
-    def __put_handlers(self, type: Type[T]) -> Set[_SinkHandler]:
+    def _put_handlers(self, type: Type[T]) -> Set[_SinkHandler]:
         handlers = set()
 
-        for sink in self.__sinks:
+        for sink in self._sinks:
             try:
-                handler = self.__sink_handler(sink, type)
+                handler = self._sink_handler(sink, type)[0]
                 handlers.add(handler)
             except NoConversionError:
                 pass
@@ -334,7 +343,7 @@ class DataPipeline(object):
 
         return handlers
 
-    def __new_context(self) -> PipelineContext:
+    def _new_context(self) -> PipelineContext:
         context = PipelineContext()
         context[PipelineContext.Keys.PIPELINE] = self
         return context
@@ -342,20 +351,20 @@ class DataPipeline(object):
     def get(self, type: Type[T], query: Mapping[str, Any]) -> T:
         LOGGER.info("Getting SourceHandlers for \"{type}\"".format(type=type.__name__))
         try:
-            handlers = self.__get_types[type]
+            handlers = self._get_types[type]
         except KeyError:
             try:
                 LOGGER.info("Building new SourceHandlers for \"{type}\"".format(type=type.__name__))
-                handlers = self.__get_handlers(type)
+                handlers = self._get_handlers(type)
             except NoConversionError:
                 handlers = None
-            self.__get_types[type] = handlers
+            self._get_types[type] = handlers
 
         if handlers is None:
             raise NoConversionError("No source can provide \"{type}\"".format(type=type.__name__))
 
         LOGGER.info("Creating new PipelineContext")
-        context = self.__new_context()
+        context = self._new_context()
 
         LOGGER.info("Querying SourceHandlers for \"{type}\"".format(type=type.__name__))
         for handler in handlers:
@@ -369,20 +378,20 @@ class DataPipeline(object):
     def get_many(self, type: Type[T], query: Mapping[str, Any], streaming: bool = True) -> Iterable[T]:
         LOGGER.info("Getting SourceHandlers for \"{type}\"".format(type=type.__name__))
         try:
-            handlers = self.__get_types[type]
+            handlers = self._get_types[type]
         except KeyError:
             try:
                 LOGGER.info("Building new SourceHandlers for \"{type}\"".format(type=type.__name__))
-                handlers = self.__get_handlers(type)
+                handlers = self._get_handlers(type)
             except NoConversionError:
                 handlers = None
-            self.__get_types[type] = handlers
+            self._get_types[type] = handlers
 
         if handlers is None:
             raise NoConversionError("No source can provide \"{type}\"".format(type=type.__name__))
 
         LOGGER.info("Creating new PipelineContext")
-        context = self.__new_context()
+        context = self._new_context()
 
         LOGGER.info("Querying SourceHandlers for \"{type}\"".format(type=type.__name__))
         for handler in handlers:
@@ -396,17 +405,17 @@ class DataPipeline(object):
     def put(self, type: Type[T], item: T) -> None:
         LOGGER.info("Getting SinkHandlers for \"{type}\"".format(type=type.__name__))
         try:
-            handlers = self.__put_types[type]
+            handlers = self._put_types[type]
         except KeyError:
             try:
                 LOGGER.info("Building new SinkHandlers for \"{type}\"".format(type=type.__name__))
-                handlers = self.__put_handlers(type)
+                handlers = self._put_handlers(type)
             except NoConversionError:
                 handlers = None
-            self.__get_types[type] = handlers
+            self._get_types[type] = handlers
 
         LOGGER.info("Creating new PipelineContext")
-        context = self.__new_context()
+        context = self._new_context()
 
         LOGGER.info("Sending item \"{item}\" to SourceHandlers".format(item=item))
         if handlers is not None:
@@ -416,17 +425,17 @@ class DataPipeline(object):
     def put_many(self, type: Type[T], items: Iterable[T]) -> None:
         LOGGER.info("Getting SinkHandlers for \"{type}\"".format(type=type.__name__))
         try:
-            handlers = self.__put_types[type]
+            handlers = self._put_types[type]
         except KeyError:
             try:
                 LOGGER.info("Building new SinkHandlers for \"{type}\"".format(type=type.__name__))
-                handlers = self.__put_handlers(type)
+                handlers = self._put_handlers(type)
             except NoConversionError:
                 handlers = None
-            self.__get_types[type] = handlers
+            self._get_types[type] = handlers
 
         LOGGER.info("Creating new PipelineContext")
-        context = self.__new_context()
+        context = self._new_context()
 
         LOGGER.info("Sending items \"{items}\" to SourceHandlers".format(items=items))
         if handlers is not None:

@@ -17,12 +17,12 @@ class DataSink(ABC):
         types = set()
         any_dispatch = False
         try:
-            types.update(getattr(self.__class__, "put").__accepts)
+            types.update(getattr(self.__class__, "put")._accepts)
             any_dispatch = True
         except AttributeError:
             pass
         try:
-            types.update(getattr(self.__class__, "put_many").__accepts)
+            types.update(getattr(self.__class__, "put_many")._accepts)
             any_dispatch = True
         except AttributeError:
             pass
@@ -53,6 +53,6 @@ class DataSink(ABC):
             return dispatcher.register(type)
 
         wrapper.register = register
-        wrapper.__accepts = accepts
+        wrapper._accepts = accepts
         update_wrapper(wrapper, method)
         return wrapper
