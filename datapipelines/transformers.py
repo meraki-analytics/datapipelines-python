@@ -10,8 +10,8 @@ T = TypeVar("T")
 
 class DataTransformer(ABC):
     @staticmethod
-    def unsupported(target_type: Type[T], value: F) -> None:
-        raise UnsupportedError("The conversion from type \"{from_type}\" to type \"{to_type}\" is not supported by this DataTransformer!".format(from_type=value.__class__.__name__, to_type=target_type.__name__))
+    def unsupported(target_type: Type[T], value: F) -> UnsupportedError:
+        return UnsupportedError("The conversion from type \"{from_type}\" to type \"{to_type}\" is not supported by this DataTransformer!".format(from_type=value.__class__.__name__, to_type=target_type.__name__))
 
     @property
     def transforms(self) -> Mapping[Type, Collection[Type]]:
@@ -36,9 +36,9 @@ class DataTransformer(ABC):
         def wrapper(self: Any, target_type: Type[T], value: F, context: PipelineContext = None) -> T:
             call = dispatcher.dispatch(TypePair[value.__class__, target_type])
             try:
-                return call(self, value, context)
+                return call(self, value, context=context)
             except TypeError:
-                return call(self, target_type, value, context)
+                raise DataTransformer.unsupported(target_type, value)
 
         def register(from_type: Type[F], to_type: Type[T]) -> Callable[[Any, Type[T], F, PipelineContext], T]:
             try:

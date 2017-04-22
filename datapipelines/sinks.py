@@ -1,6 +1,6 @@
-from typing import TypeVar, Type, Any, Iterable, Collection, Callable, Union
-from functools import singledispatch, update_wrapper
 from abc import ABC, abstractmethod
+from functools import singledispatch, update_wrapper
+from typing import TypeVar, Type, Any, Iterable, Collection, Callable, Union
 
 from .common import PipelineContext, UnsupportedError, TYPE_WILDCARD
 
@@ -9,8 +9,8 @@ T = TypeVar("T")
 
 class DataSink(ABC):
     @staticmethod
-    def unsupported(type: Type[T]) -> None:
-        raise UnsupportedError("The type \"{type}\" is not supported by this DataSink!".format(type=type.__name__))
+    def unsupported(type: Type[T]) -> UnsupportedError:
+        return UnsupportedError("The type \"{type}\" is not supported by this DataSink!".format(type=type.__name__))
 
     @property
     def accepts(self) -> Union[Collection[Type[T]], Type[Any]]:
@@ -44,9 +44,9 @@ class DataSink(ABC):
         def wrapper(self: Any, type: Type[T], items: Any, context: PipelineContext = None) -> None:
             call = dispatcher.dispatch(type)
             try:
-                return call(self, items, context)
+                return call(self, items, context=context)
             except TypeError:
-                return call(self, type, items, context)
+                raise DataSink.unsupported(type)
 
         def register(type: Type[T]) -> Callable[[Any, Type[T], Any, PipelineContext], None]:
             accepts.add(type)

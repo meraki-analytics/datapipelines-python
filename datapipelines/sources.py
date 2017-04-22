@@ -9,8 +9,8 @@ T = TypeVar("T")
 
 class DataSource(ABC):
     @staticmethod
-    def unsupported(type: Type[T]) -> None:
-        raise UnsupportedError("The type \"{type}\" is not supported by this DataSource!".format(type=type.__name__))
+    def unsupported(type: Type[T]) -> UnsupportedError:
+        return UnsupportedError("The type \"{type}\" is not supported by this DataSource!".format(type=type.__name__))
 
     @property
     def provides(self) -> Union[Collection[Type[T]], Type[Any]]:
@@ -44,9 +44,9 @@ class DataSource(ABC):
         def wrapper(self: Any, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> Any:
             call = dispatcher.dispatch(type)
             try:
-                return call(self, query, context)
+                return call(self, query, context=context)
             except TypeError:
-                return call(self, type, query, context)
+                raise DataSource.unsupported(type)
 
         def register(type: Type[T]) -> Callable[[Any, Type[T], Mapping[str, Any], PipelineContext], Any]:
             provides.add(type)
