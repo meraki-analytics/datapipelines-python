@@ -15,6 +15,7 @@ class DataTransformer(ABC):
 
     @property
     def transforms(self) -> Mapping[Type, Collection[Type]]:
+        """The available data transformers."""
         try:
             return getattr(self.__class__, "transform")._transforms
         except AttributeError:
@@ -22,10 +23,18 @@ class DataTransformer(ABC):
 
     @abstractmethod
     def transform(self, target_type: Type[T], value: F, context: PipelineContext = None) -> T:
+        """Transforms an object to a new type.
+
+        Args:
+            target_type: The type to be converted to.
+            value: The object to be transformed.
+            context: The context of the transformation (mutable).
+        """
         pass
 
     @property
     def cost(self) -> int:
+        """The cost of the tranformation (default 1)."""
         return 1
 
     @staticmethod

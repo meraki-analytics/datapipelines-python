@@ -14,6 +14,7 @@ class DataSource(ABC):
 
     @property
     def provides(self) -> Union[Collection[Type[T]], Type[Any]]:
+        """The types of objects the data store provides."""
         types = set()
         any_dispatch = False
         try:
@@ -30,10 +31,28 @@ class DataSource(ABC):
 
     @abstractmethod
     def get(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> T:
+        """Gets a query from the data source.
+
+        Args:
+            query: The query being requested.
+            context: The context for the extraction (mutable).
+
+        Returns:
+            The requested object.
+        """
         pass
 
     @abstractmethod
     def get_many(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> Iterable[T]:
+        """Gets a query from the data source, which contains a request for multiple objects.
+
+        Args:
+            query: The query being requested (contains a request for multiple objects).
+            context: The context for the extraction (mutable).
+
+        Returns:
+            The requested objects.
+        """
         pass
 
     @staticmethod

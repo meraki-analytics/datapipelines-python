@@ -97,6 +97,16 @@ def _identity(data: T, context: PipelineContext = None) -> T:
 
 
 def _transform(transformer_chain: Sequence[Tuple[DataTransformer, Type]], data: S, context: PipelineContext = None) -> T:
+    """Transform data to a new type.
+
+    Args:
+        transformer_chain: A sequence of (transformer, type) pairs to convert the data.
+        data: The data to be transformed.
+        context: The context of the transformations (mutable).
+
+    Returns:
+        The transformed data.
+    """
     for transformer, target_type in transformer_chain:
         # noinspection PyTypeChecker
         data = transformer.transform(target_type, data, context)
@@ -105,17 +115,36 @@ def _transform(transformer_chain: Sequence[Tuple[DataTransformer, Type]], data: 
 
 class _SinkHandler(Generic[S, T]):
     def __init__(self, sink: DataSink, store_type: Type[S], transform: Callable[[T], S]) -> None:
+        """Initializes a handler for a data sink.
+
+        Args:
+            sink: The data sink.
+            store_type: ???
+            transform: ???
+        """
         self._sink = sink
         self._store_type = store_type
         self._transform = transform
 
     def put(self, item: T, context: PipelineContext = None) -> None:
+        """Puts an objects into the data sink. The objects may be transformed into a new type for insertion if necessary.
+
+        Args:
+            item: The objects to be inserted into the data sink.
+            context: The context of the insertion (mutable).
+        """
         LOGGER.info("Converting item \"{item}\" for sink \"{sink}\"".format(item=item, sink=self._sink))
         item = self._transform(data=item, context=context)
         LOGGER.info("Puting item \"{item}\" into sink \"{sink}\"".format(item=item, sink=self._sink))
         self._sink.put(self._store_type, item, context)
 
     def put_many(self, items: Iterable[T], context: PipelineContext = None) -> None:
+        """Puts multiple objects of the same type into the data sink. The objects may be transformed into a new type for insertion if necessary.
+
+        Args:
+            items: An iterable (e.g. list) of objects to be inserted into the data sink.
+            context: The context of the insertions (mutable).
+        """
         LOGGER.info("Creating transform generator for items \"{items}\" for sink \"{sink}\"".format(items=items, sink=self._sink))
         transform_generator = (self._transform(data=item, context=context) for item in items)
         LOGGER.info("Putting transform generator for items \"{items}\" into sink \"{sink}\"".format(items=items, sink=self._sink))
@@ -124,6 +153,13 @@ class _SinkHandler(Generic[S, T]):
 
 class _SourceHandler(Generic[S, T]):
     def __init__(self, source: DataSource, source_type: Type[S], transform: Callable[[S], T], sinks: Mapping[_SinkHandler, bool]) -> None:
+        """Initializes a handler for a data source.
+
+        source: The data source.
+        source_type: ???
+        transform: ???
+        sinks: ???
+        """
         self._source = source
         self._source_type = source_type
         self._transform = transform
@@ -131,6 +167,20 @@ class _SourceHandler(Generic[S, T]):
         self._after_transform = {sink for sink, do_transform in sinks.items() if do_transform}
 
     def get(self, query: Mapping[str, Any], context: PipelineContext = None) -> T:
+        """Gets a query from the data source.
+
+        1) Extracts the query from the data source.
+        2) Inserts the result into any data sinks.
+        3) Transforms the result into the requested type if it wasn't already.
+        4) Inserts the transformed result into any data sinks.
+
+        Args:
+            query: The query being requested.
+            context: The context for the extraction (mutable).
+
+        Returns:
+            The requested object.
+        """
         result = self._source.get(self._source_type, query, context)
         LOGGER.info("Got result \"{result}\" from query \"{query}\" of source \"{source}\"".format(result=result, query=query, source=self._source))
 
@@ -163,6 +213,21 @@ class _SourceHandler(Generic[S, T]):
             yield item
 
     def get_many(self, query: Mapping[str, Any], context: PipelineContext = None, streaming: bool = True) -> Iterable[T]:
+        """Gets a query from the data source, where the query contains multiple elements to be extracted.
+
+        1) Extracts the query from the data source.
+        2) Inserts the result into any data sinks.
+        3) Transforms the results into the requested type if it wasn't already.
+        4) Inserts the transformed result into any data sinks.
+
+        Args:
+            query: The query being requested.
+            context: The context for the extraction (mutable).
+            streaming: Specifies whether the results should be returned as a generator (default True).
+
+        Returns:
+            The requested objects or a generator of the objects if streaming is True.
+        """
         result = self._source.get_many(self._source_type, query, context)
         LOGGER.info("Got results \"{result}\" from query \"{query}\" of source \"{source}\"".format(result=result, query=query, source=self._source))
 
@@ -189,6 +254,12 @@ class _SourceHandler(Generic[S, T]):
 
 class DataPipeline(object):
     def __init__(self, elements: Sequence[Union[DataSource, DataSink]], transformers: Collection[DataTransformer] = None) -> None:
+        """Initializes a data pipeline.
+
+        Args:
+            elements: The data stores and data sinks for this pipeline.
+            transformers: The data transformers for this pipeline.
+        """
         if not elements:
             raise ValueError("Elements must be a non-empty sequence of DataSources and DataSinks")
 
@@ -349,6 +420,20 @@ class DataPipeline(object):
         return context
 
     def get(self, type: Type[T], query: Mapping[str, Any]) -> T:
+        """Gets a query from the data pipeline.
+
+        1) Extracts the query the sequence of data sources.
+        2) Inserts the result into the data sinks (if appropriate).
+        3) Transforms the result into the requested type if it wasn't already.
+        4) Inserts the transformed result into any data sinks.
+
+        Args:
+            query: The query being requested.
+            context: The context for the extraction (mutable).
+
+        Returns:
+            The requested object.
+        """
         LOGGER.info("Getting SourceHandlers for \"{type}\"".format(type=type.__name__))
         try:
             handlers = self._get_types[type]
@@ -376,6 +461,21 @@ class DataPipeline(object):
         raise NotFoundError("No source returned a query result!")
 
     def get_many(self, type: Type[T], query: Mapping[str, Any], streaming: bool = True) -> Iterable[T]:
+        """Gets a query from the data pipeline, which contains a request for multiple objects.
+
+        1) Extracts the query the sequence of data sources.
+        2) Inserts the results into the data sinks (if appropriate).
+        3) Transforms the results into the requested type if it wasn't already.
+        4) Inserts the transformed result into any data sinks.
+
+        Args:
+            query: The query being requested (contains a request for multiple objects).
+            context: The context for the extraction (mutable).
+            streaming: Specifies whether the results should be returned as a generator (default True).
+
+        Returns:
+            The requested objects or a generator of the objects if streaming is True.
+        """
         LOGGER.info("Getting SourceHandlers for \"{type}\"".format(type=type.__name__))
         try:
             handlers = self._get_types[type]
@@ -403,6 +503,11 @@ class DataPipeline(object):
         raise NotFoundError("No source returned a query result!")
 
     def put(self, type: Type[T], item: T) -> None:
+        """Puts an objects into the data pipeline. The object may be transformed into a new type for insertion if necessary.
+
+        Args:
+            item: The object to be inserted into the data pipeline.
+        """
         LOGGER.info("Getting SinkHandlers for \"{type}\"".format(type=type.__name__))
         try:
             handlers = self._put_types[type]
@@ -423,6 +528,11 @@ class DataPipeline(object):
                 handler.put(item, context)
 
     def put_many(self, type: Type[T], items: Iterable[T]) -> None:
+        """Puts multiple objects of the same type into the data sink. The objects may be transformed into a new type for insertion if necessary.
+
+        Args:
+            items: An iterable (e.g. list) of objects to be inserted into the data pipeline.
+        """
         LOGGER.info("Getting SinkHandlers for \"{type}\"".format(type=type.__name__))
         try:
             handlers = self._put_types[type]

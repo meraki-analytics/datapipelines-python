@@ -14,6 +14,7 @@ class DataSink(ABC):
 
     @property
     def accepts(self) -> Union[Collection[Type[T]], Type[Any]]:
+        """The types of objects the data sink can store."""
         types = set()
         any_dispatch = False
         try:
@@ -30,10 +31,24 @@ class DataSink(ABC):
 
     @abstractmethod
     def put(self, type: Type[T], item: T, context: PipelineContext = None) -> None:
+        """Puts an object into the data sink.
+
+        Args:
+            type: The type of the object being inserted.
+            item: The object to be inserted.
+            context: The context of the insertion (mutable).
+        """
         pass
 
     @abstractmethod
     def put_many(self, type: Type[T], items: Iterable[T], context: PipelineContext = None) -> None:
+        """Puts multiple objects of the same type into the data sink.
+
+        Args:
+            type: The type of the objects being inserted.
+            items: The objects to be inserted.
+            context: The context of the insertion (mutable).
+        """
         pass
 
     @staticmethod
