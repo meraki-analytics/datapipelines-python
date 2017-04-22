@@ -50,7 +50,7 @@ class TestDataSource(DataSource):
         pass
 
     @get.register(int)
-    def _(self, query: Mapping[str, Any], context: PipelineContext = None) -> int:
+    def get_int(self, query: Mapping[str, Any], context: PipelineContext = None) -> int:
         value = query.get(VALUE_KEY)
 
         try:
@@ -59,7 +59,7 @@ class TestDataSource(DataSource):
             raise NotFoundError("Couldn't cast the query value to \"int\"")
 
     @get_many.register(int)
-    def _(self, query: Mapping[str, Any], context: PipelineContext = None) -> Generator[int, None, None]:
+    def get_many_int(self, query: Mapping[str, Any], context: PipelineContext = None) -> Generator[int, None, None]:
         value = query.get(VALUE_KEY)
         count = query.get(COUNT_KEY)
 
@@ -71,7 +71,7 @@ class TestDataSource(DataSource):
         return (value for _ in range(count))
 
     @get.register(float)
-    def _(self, query: Mapping[str, Any], context: PipelineContext = None) -> float:
+    def get_float(self, query: Mapping[str, Any], context: PipelineContext = None) -> float:
         value = query.get(VALUE_KEY)
 
         try:
@@ -80,7 +80,7 @@ class TestDataSource(DataSource):
             raise NotFoundError("Couldn't cast the query value to \"float\"")
 
     @get_many.register(float)
-    def _(self, query: Mapping[str, Any], context: PipelineContext = None) -> Generator[float, None, None]:
+    def get_many_float(self, query: Mapping[str, Any], context: PipelineContext = None) -> Generator[float, None, None]:
         value = query.get(VALUE_KEY)
         count = query.get(COUNT_KEY)
 

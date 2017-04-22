@@ -1,6 +1,6 @@
-from typing import Generic, TypeVar, Type, Any
+from typing import Generic, TypeVar, Any
 
-TYPE_WILDCARD = Any  # type: Type[Any]
+TYPE_WILDCARD = Any
 
 
 class UnsupportedError(ValueError):

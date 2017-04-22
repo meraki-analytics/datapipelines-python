@@ -1,4 +1,4 @@
-from typing import Type, TypeVar, Sequence, Union, Collection, Optional, Callable, Any, List, Set, Generic, Mapping, Iterable, Tuple, Generator
+from typing import Type, TypeVar, Sequence, Union, Collection, Callable, Any, List, Set, Generic, Mapping, Iterable, Tuple, Generator
 from functools import partial
 from itertools import tee
 from logging import getLogger
