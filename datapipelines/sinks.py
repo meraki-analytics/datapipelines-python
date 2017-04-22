@@ -29,11 +29,11 @@ class DataSink(ABC):
         return types if any_dispatch else TYPE_WILDCARD
 
     @abstractmethod
-    def put(self, type: Type[T], item: Any, context: PipelineContext = None) -> None:
+    def put(self, type: Type[T], item: T, context: PipelineContext = None) -> None:
         pass
 
     @abstractmethod
-    def put_many(self, type: Type[T], items: Iterable[Any], context: PipelineContext = None) -> None:
+    def put_many(self, type: Type[T], items: Iterable[T], context: PipelineContext = None) -> None:
         pass
 
     @staticmethod

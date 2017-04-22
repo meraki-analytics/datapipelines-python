@@ -17,7 +17,7 @@ VALUES_COUNT = 100
 VALUES_MAX = 10000
 
 
-class TestWildcardDataSource(DataSource):
+class SimpleWildcardDataSource(DataSource):
     def get(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> T:
         value = query.get(VALUE_KEY)
 
@@ -40,7 +40,7 @@ class TestWildcardDataSource(DataSource):
         return (value for _ in range(count))
 
 
-class TestDataSource(DataSource):
+class SimpleDataSource(DataSource):
     @DataSource.dispatch
     def get(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> T:
         pass
@@ -114,14 +114,14 @@ def test_unsupported():
 #####################
 
 def test_provides():
-    source = TestDataSource()
+    source = SimpleDataSource()
 
     assert source.provides == {int, float}
 
 
 def test_wildcard_provides():
     from datapipelines import TYPE_WILDCARD
-    source = TestWildcardDataSource()
+    source = SimpleWildcardDataSource()
 
     assert source.provides is TYPE_WILDCARD
 
@@ -131,7 +131,7 @@ def test_wildcard_provides():
 ################
 
 def test_get():
-    source = TestDataSource()
+    source = SimpleDataSource()
 
     values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
 
@@ -142,21 +142,7 @@ def test_get():
         assert type(result) is int
         assert result == value
 
-    for value in values:
-        query = {VALUE_KEY: value}
-        result = source.get(float, query)
-
-        assert type(result) is float
-        assert result == value
-
     values = [random.uniform(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
-
-    for value in values:
-        query = {VALUE_KEY: value}
-        result = source.get(int, query)
-
-        assert type(result) is int
-        assert result == int(value)
 
     for value in values:
         query = {VALUE_KEY: value}
@@ -168,7 +154,7 @@ def test_get():
 
 def test_get_unsupported():
     from datapipelines import UnsupportedError
-    source = TestDataSource()
+    source = SimpleDataSource()
 
     query = {VALUE_KEY: "test"}
 
@@ -177,7 +163,7 @@ def test_get_unsupported():
 
 
 def test_wildcard_get():
-    source = TestWildcardDataSource()
+    source = SimpleWildcardDataSource()
 
     values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
 
@@ -188,21 +174,7 @@ def test_wildcard_get():
         assert type(result) is int
         assert result == value
 
-    for value in values:
-        query = {VALUE_KEY: value}
-        result = source.get(float, query)
-
-        assert type(result) is float
-        assert result == value
-
     values = [random.uniform(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
-
-    for value in values:
-        query = {VALUE_KEY: value}
-        result = source.get(int, query)
-
-        assert type(result) is int
-        assert result == int(value)
 
     for value in values:
         query = {VALUE_KEY: value}
@@ -217,7 +189,7 @@ def test_wildcard_get():
 #####################
 
 def test_get_many():
-    source = TestDataSource()
+    source = SimpleDataSource()
 
     # Seriously where is this in the std lib...
     generator_class = (None for _ in range(0)).__class__
@@ -233,25 +205,7 @@ def test_get_many():
             assert type(res) is int
             assert res == value
 
-    for value in values:
-        query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
-        result = source.get_many(float, query)
-
-        assert type(result) is generator_class
-        for res in result:
-            assert type(res) is float
-            assert res == value
-
     values = [random.uniform(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
-
-    for value in values:
-        query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
-        result = source.get_many(int, query)
-
-        assert type(result) is generator_class
-        for res in result:
-            assert type(res) is int
-            assert res == int(value)
 
     for value in values:
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
@@ -265,7 +219,7 @@ def test_get_many():
 
 def test_get_many_unsupported():
     from datapipelines import UnsupportedError
-    source = TestDataSource()
+    source = SimpleDataSource()
 
     query = {VALUE_KEY: "test", COUNT_KEY: VALUES_COUNT}
 
@@ -274,7 +228,7 @@ def test_get_many_unsupported():
 
 
 def test_wildcard_get_many():
-    source = TestWildcardDataSource()
+    source = SimpleWildcardDataSource()
 
     # Seriously where is this in the std lib...
     generator_class = (None for _ in range(0)).__class__
@@ -290,25 +244,7 @@ def test_wildcard_get_many():
             assert type(res) is int
             assert res == value
 
-    for value in values:
-        query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
-        result = source.get_many(float, query)
-
-        assert type(result) is generator_class
-        for res in result:
-            assert type(res) is float
-            assert res == value
-
     values = [random.uniform(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
-
-    for value in values:
-        query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
-        result = source.get_many(int, query)
-
-        assert type(result) is generator_class
-        for res in result:
-            assert type(res) is int
-            assert res == int(value)
 
     for value in values:
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
