@@ -9,7 +9,7 @@ with open(path.join(here, "README.rst"), encoding="UTF-8") as readme:
 
 setup(
     name="datapipelines",
-    version="0.0.1.dev1",
+    version="0.0.1.dev3",
     author="Rob Rua",
     author_email="robrua@alumni.cmu.edu",
     url="https://github.com/meraki-analytics/datapipelines",
@@ -32,6 +32,6 @@ setup(
         "networkx"
     ],
     extras_require={
-        "testing": ["pytest"]
+        "testing": ["pytest", "flake8"]
     }
 )
