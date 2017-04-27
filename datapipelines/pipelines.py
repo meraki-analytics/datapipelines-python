@@ -2,6 +2,7 @@ from typing import Type, TypeVar, Sequence, Union, Collection, Callable, Any, Li
 from functools import partial
 from itertools import tee
 from logging import getLogger
+from copy import deepcopy
 
 from networkx import DiGraph, dijkstra_path, NetworkXNoPath
 
@@ -181,7 +182,7 @@ class _SourceHandler(Generic[S, T]):
         Returns:
             The requested object.
         """
-        result = self._source.get(self._source_type, query, context)
+        result = self._source.get(self._source_type, deepcopy(query), context)
         LOGGER.info("Got result \"{result}\" from query \"{query}\" of source \"{source}\"".format(result=result, query=query, source=self._source))
 
         LOGGER.info("Sending result \"{result}\" to sinks before converting".format(result=result))
@@ -228,7 +229,7 @@ class _SourceHandler(Generic[S, T]):
         Returns:
             The requested objects or a generator of the objects if streaming is True.
         """
-        result = self._source.get_many(self._source_type, query, context)
+        result = self._source.get_many(self._source_type, deepcopy(query), context)
         LOGGER.info("Got results \"{result}\" from query \"{query}\" of source \"{source}\"".format(result=result, query=query, source=self._source))
 
         if not streaming:
