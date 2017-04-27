@@ -2,9 +2,10 @@ import random
 from typing import Type, TypeVar, Mapping, Any, Iterable, Generator
 
 import pytest
+from networkx import DiGraph
+
 from datapipelines import DataPipeline, DataSource, DataSink, DataTransformer, PipelineContext, NotFoundError, NoConversionError
 from datapipelines.pipelines import _build_type_graph, _pairwise, _identity, _transform, _SinkHandler, _SourceHandler
-from networkx import DiGraph
 
 T = TypeVar("T")
 F = TypeVar("F")
@@ -14,6 +15,9 @@ COUNT_KEY = "count"
 
 VALUES_COUNT = 100
 VALUES_MAX = 100000000
+
+# Seriously where is this in the std lib...
+GENERATOR_CLASS = (None for _ in range(0)).__class__
 
 
 ###############################################
@@ -343,9 +347,6 @@ def test_source_handler_get_many_streaming():
     before_sink = FloatStore()
     after_sink = FloatStore()
 
-    # Seriously where is this in the std lib...
-    generator_class = (None for _ in range(0)).__class__
-
     def convert(data: int, context: PipelineContext = None) -> float:
         return float(data)
 
@@ -362,7 +363,7 @@ def test_source_handler_get_many_streaming():
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
         result = handler.get_many(query, streaming=True)
 
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
         floored_value = float(int(value))  # float to int conversion will floor the value
         for res in result:
             assert res == floored_value
@@ -793,16 +794,13 @@ def test_get_many_streaming():
     # noinspection PyTypeChecker
     pipeline = DataPipeline(elements, transformers)
 
-    # Seriously where is this in the std lib...
-    generator_class = (None for _ in range(0)).__class__
-
     values = [str(random.randint(-VALUES_MAX, VALUES_MAX)) for _ in range(VALUES_COUNT)]
 
     for value in values:
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
 
         result = pipeline.get_many(int, query, streaming=True)
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
 
         for res in result:
             assert type(res) is int
@@ -815,7 +813,7 @@ def test_get_many_streaming():
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
 
         result = pipeline.get_many(float, query, streaming=True)
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
 
         for res in result:
             assert type(res) is float
@@ -828,7 +826,7 @@ def test_get_many_streaming():
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
 
         result = pipeline.get_many(str, query, streaming=True)
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
 
         for res in result:
             assert type(res) is str

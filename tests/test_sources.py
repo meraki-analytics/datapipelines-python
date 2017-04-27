@@ -2,6 +2,7 @@ import random
 from typing import Type, TypeVar, Mapping, Any, Iterable, Generator
 
 import pytest
+
 from datapipelines import DataSource, PipelineContext, NotFoundError
 
 #########################################
@@ -15,6 +16,9 @@ COUNT_KEY = "count"
 
 VALUES_COUNT = 100
 VALUES_MAX = 100000000
+
+# Seriously where is this in the std lib...
+GENERATOR_CLASS = (None for _ in range(0)).__class__
 
 
 class SimpleWildcardDataSource(DataSource):
@@ -191,16 +195,13 @@ def test_wildcard_get():
 def test_get_many():
     source = SimpleDataSource()
 
-    # Seriously where is this in the std lib...
-    generator_class = (None for _ in range(0)).__class__
-
     values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
 
     for value in values:
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
         result = source.get_many(int, query)
 
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
         for res in result:
             assert type(res) is int
             assert res == value
@@ -211,7 +212,7 @@ def test_get_many():
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
         result = source.get_many(float, query)
 
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
         for res in result:
             assert type(res) is float
             assert res == value
@@ -230,16 +231,13 @@ def test_get_many_unsupported():
 def test_wildcard_get_many():
     source = SimpleWildcardDataSource()
 
-    # Seriously where is this in the std lib...
-    generator_class = (None for _ in range(0)).__class__
-
     values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
 
     for value in values:
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
         result = source.get_many(int, query)
 
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
         for res in result:
             assert type(res) is int
             assert res == value
@@ -250,7 +248,7 @@ def test_wildcard_get_many():
         query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
         result = source.get_many(float, query)
 
-        assert type(result) is generator_class
+        assert type(result) is GENERATOR_CLASS
         for res in result:
             assert type(res) is float
             assert res == value
