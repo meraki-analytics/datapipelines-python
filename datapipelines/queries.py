@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Type, MutableMapping, Any, Iterable, Union
+from typing import Type, MutableMapping, Any, Iterable, Union, Callable
 
 
 class QueryValidationError(ValueError):
@@ -57,15 +57,19 @@ class _OrNode(_ValidationNode):
 
 
 class _DefaultValueNode(_ValidationNode):
-    def __init__(self, key: str, value: Any) -> None:
+    def __init__(self, key: str, value: Union[Any, Callable[[MutableMapping[str, Any]], Any]], supplies_type: Type = None) -> None:
         self.key = key
         self.value = value
+        self.supplies_type = supplies_type
 
     def __str__(self) -> str:
         return self.value
 
     def evaluate(self, query: MutableMapping[str, Any]) -> bool:
-        query[self.key] = self.value
+        if self.supplies_type:
+            query[self.key] = self.value(query)
+        else:
+            query[self.key] = self.value
         return True
 
 
@@ -196,15 +200,20 @@ class QueryValidator(object):
         self._parent = None
         return self
 
-    def with_default(self, value: Any) -> "QueryValidator":
+    def with_default(self, value: Union[Any, Callable[[MutableMapping[str, Any]], Any]], supplies_type: Type = None) -> "QueryValidator":
         if self._current is None or self._current.child is not None:
             raise QueryValidatorStructureError("No key is selected! Try using \"can_have\" before \"with_default\".")
 
         if self._current.required:
             raise QueryValidatorStructureError("Can't assign a default value to a required key! Try using \"can_have\" instead of \"have\".")
 
-        default_node = _DefaultValueNode(self._current.key, value)
-        result = self.as_(type(value))
+        if supplies_type:
+            expected_type = supplies_type
+        else:
+            expected_type = type(value)
+
+        default_node = _DefaultValueNode(self._current.key, value, supplies_type)
+        result = self.as_(expected_type)
         result._current.child.child = default_node
         return result
 
