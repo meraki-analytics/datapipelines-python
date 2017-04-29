@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Type, MutableMapping, Any, Iterable, Union, Callable
 
+from .pipelines import PipelineContext
+
 
 class QueryValidationError(ValueError):
     pass
@@ -20,7 +22,7 @@ class QueryValidatorStructureError(AttributeError):
 
 class _ValidationNode(ABC):
     @abstractmethod
-    def evaluate(self, query: MutableMapping[str, Any]) -> bool:
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         pass
 
 
@@ -31,8 +33,8 @@ class _AndNode(_ValidationNode):
     def __str__(self) -> str:
         return " AND ".join(str(child) for child in self.children)
 
-    def evaluate(self, query: MutableMapping[str, Any]) -> bool:
-        return all(child.evaluate(query) for child in self.children)
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
+        return all(child.evaluate(query, context) for child in self.children)
 
 
 class _OrNode(_ValidationNode):
@@ -42,13 +44,13 @@ class _OrNode(_ValidationNode):
     def __str__(self) -> str:
         return " OR ".join(str(child) for child in self.children)
 
-    def evaluate(self, query: MutableMapping[str, Any]) -> bool:
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         # We can't short circuit this because we want to raise any WrongValueTypeError that could occur
         errors = []
         result = False
         for child in self.children:
             try:
-                result = child.evaluate(query) or result
+                result = child.evaluate(query, context) or result
             except MissingKeyError as error:
                 errors.append(error)
         if len(errors) == len(self.children):
@@ -65,9 +67,9 @@ class _DefaultValueNode(_ValidationNode):
     def __str__(self) -> str:
         return self.value
 
-    def evaluate(self, query: MutableMapping[str, Any]) -> bool:
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         if self.supplies_type:
-            query[self.key] = self.value(query)
+            query[self.key] = self.value(query, context)
         else:
             query[self.key] = self.value
         return True
@@ -82,7 +84,7 @@ class _TypeNode(_ValidationNode):
     def __str__(self) -> str:
         return " OR ".join(type.__name__ for type in self.types)
 
-    def evaluate(self, query: MutableMapping[str, Any]) -> bool:
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         try:
             value = query[self.key]
             for type in self.types:
@@ -91,7 +93,7 @@ class _TypeNode(_ValidationNode):
             raise WrongValueTypeError("{key} must be of type {type} in query!".format(key=self.key, type=self))
         except KeyError:
             if self.child:
-                return self.child.evaluate(query)
+                return self.child.evaluate(query, context)
         return True
 
 
@@ -104,11 +106,11 @@ class _KeyNode(_ValidationNode):
     def __str__(self) -> str:
         return self.key
 
-    def evaluate(self, query: MutableMapping[str, Any]) -> bool:
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         if self.required and self.key not in query:
             raise MissingKeyError("{key} must be in query!".format(key=self.key))
         if self.child:
-            return self.child.evaluate(query)
+            return self.child.evaluate(query, context)
         return True
 
 
@@ -118,8 +120,8 @@ class QueryValidator(object):
         self._current = None  # type: _KeyNode
         self._parent = None  # type: Union[_AndNode, _OrNode]
 
-    def __call__(self, query: MutableMapping[str, Any]) -> bool:
-        return self._root.evaluate(query)
+    def __call__(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
+        return self._root.evaluate(query, context)
 
     def has(self, key: str) -> "QueryValidator":
         if self._current is not None:

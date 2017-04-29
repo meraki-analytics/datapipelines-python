@@ -439,7 +439,7 @@ def test_no_default_type():
 def test_default_supplier():
     x = 0
 
-    def supplier(query):
+    def supplier(query, context):
         nonlocal x
         x += 1
         return "test"
