@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Type, MutableMapping, Any, Iterable, Union, Callable
 from enum import Enum
+from typing import Type, MutableMapping, Any, Iterable, Union, Callable
 
 from .pipelines import PipelineContext
 
@@ -77,10 +77,10 @@ class _DefaultValueNode(_ValidationNode):
 
 
 class _TypeNode(_ValidationNode):
-    def __init__(self, key: str, types: Union[Type, Iterable[Type]], child: _DefaultValueNode = None) -> None:
+    def __init__(self, key: str, types: Iterable[Type], child: _DefaultValueNode = None) -> None:
         self.key = key
         self.child = child
-        self.types = set(types) if isinstance(types, Iterable) else {types}
+        self.types = types
 
     def __str__(self) -> str:
         return " OR ".join(type.__name__ for type in self.types)
@@ -92,6 +92,7 @@ class _TypeNode(_ValidationNode):
                 if issubclass(type, Enum) and isinstance(value, str):
                     value = type(value)
                 if isinstance(value, type):
+                    query[self.key] = value
                     return True
             raise WrongValueTypeError("{key} must be of type {type} in query!".format(key=self.key, type=self))
         except KeyError:
@@ -150,7 +151,7 @@ class QueryValidator(object):
         if self._current is None or self._current.child is not None:
             raise QueryValidatorStructureError("No key is selected! Try using \"has\" or \"can_have\" before \"as\".")
 
-        type_node = _TypeNode(self._current.key, type)
+        type_node = _TypeNode(self._current.key, {type})
         self._current.child = type_node
         return self
 
