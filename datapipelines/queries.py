@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Type, MutableMapping, Any, Iterable, Union, Callable
+from enum import Enum
 
 from .pipelines import PipelineContext
 
@@ -88,6 +89,8 @@ class _TypeNode(_ValidationNode):
         try:
             value = query[self.key]
             for type in self.types:
+                if issubclass(type, Enum) and isinstance(value, str):
+                    value = type(value)
                 if isinstance(value, type):
                     return True
             raise WrongValueTypeError("{key} must be of type {type} in query!".format(key=self.key, type=self))
