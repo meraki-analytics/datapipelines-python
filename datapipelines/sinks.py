@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import singledispatch, update_wrapper
-from typing import TypeVar, Type, Any, Iterable, Collection, Callable, Union
+from typing import TypeVar, Type, Any, Iterable, Collection, Callable, Union, AbstractSet
 
 from .common import PipelineContext, UnsupportedError, TYPE_WILDCARD
 
@@ -71,3 +71,39 @@ class DataSink(ABC):
         wrapper._accepts = accepts
         update_wrapper(wrapper, method)
         return wrapper
+
+
+class CompositeDataSink(DataSink):
+    def __init__(self, sinks: Iterable[DataSink]) -> None:
+        self._sinks = {}
+        for sink in sinks:
+            for accepted_type in sink.accepts:
+                try:
+                    accepting_sinks = self._sinks[accepted_type]
+                except KeyError:
+                    accepting_sinks = set()
+                    self._sinks[accepted_type] = accepting_sinks
+                accepting_sinks.add(sink)
+
+    @property
+    def accepts(self) -> AbstractSet[Type]:
+        return self._sinks.keys()
+
+    def put_many(self, type: Type[T], items: Iterable[T], context: PipelineContext = None) -> None:
+        try:
+            sinks = self._sinks[type]
+        except KeyError as error:
+            raise DataSink.unsupported(type) from error
+
+        items = list(items)
+        for sink in sinks:
+            sink.put_many(type, items, context)
+
+    def put(self, type: Type[T], item: T, context: PipelineContext = None) -> None:
+        try:
+            sinks = self._sinks[type]
+        except KeyError as error:
+            raise DataSink.unsupported(type) from error
+
+        for sink in sinks:
+            sink.put(type, item, context)

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
 from functools import singledispatch, update_wrapper
-from typing import TypeVar, Type, Callable, Any, Mapping, Collection
+from typing import TypeVar, Type, Callable, Any, Mapping, Collection, Iterable, Dict
+
+from merakicommons.cache import lazy_property
 
 from .common import PipelineContext, UnsupportedError, TypePair
 
@@ -63,3 +65,32 @@ class DataTransformer(ABC):
         wrapper._transforms = transforms
         update_wrapper(wrapper, method)
         return wrapper
+
+
+class CompositeDataTransformer(DataTransformer):
+    def __init__(self, transformers: Iterable[DataTransformer]) -> None:
+        self._transformers = {}
+        for transformer in transformers:
+            for source, target in transformer.transforms.items():
+                try:
+                    current_transformer = self._transformers[(source, target)]
+                    if transformer.cost < current_transformer.cost:
+                        self._transformers[(source, target)] = transformer
+                except KeyError:
+                    self._transformers[(source, target)] = transformer
+
+    @lazy_property
+    def transforms(self) -> Dict[Type, Collection[Type]]:
+        return dict(self._transformers.keys())
+
+    @lazy_property
+    def cost(self) -> int:
+        return max(transformer.cost for transformer in self._transformers.values())
+
+    def transform(self, target_type: Type[T], value: F, context: PipelineContext = None) -> T:
+        try:
+            transformer = self._transformers[type(value), target_type]
+        except KeyError as error:
+            raise DataTransformer.unsupported(target_type, value) from error
+
+        return transformer.transform(target_type, value, context)

@@ -1,8 +1,11 @@
 from abc import ABC, abstractmethod
+from copy import deepcopy
 from functools import singledispatch, update_wrapper
-from typing import TypeVar, Type, Mapping, Any, Iterable, Callable, Collection, Union
+from typing import TypeVar, Type, Mapping, Any, Iterable, Callable, Collection, Union, AbstractSet
 
-from .common import PipelineContext, UnsupportedError, TYPE_WILDCARD
+from merakicommons.cache import lazy_property
+
+from .common import PipelineContext, UnsupportedError, NotFoundError, TYPE_WILDCARD
 
 T = TypeVar("T")
 
@@ -12,7 +15,7 @@ class DataSource(ABC):
     def unsupported(type: Type[T]) -> UnsupportedError:
         return UnsupportedError("The type \"{type}\" is not supported by this DataSource!".format(type=type.__name__))
 
-    @property
+    @lazy_property
     def provides(self) -> Union[Collection[Type[T]], Type[Any]]:
         """The types of objects the data store provides."""
         types = set()
@@ -75,3 +78,46 @@ class DataSource(ABC):
         wrapper._provides = provides
         update_wrapper(wrapper, method)
         return wrapper
+
+
+class CompositeDataSource(DataSource):
+    def __init__(self, sources: Iterable[DataSource]) -> None:
+        self._sources = {}
+        for source in sources:
+            for provided_type in source.provides:
+                try:
+                    providing_sources = self._sources[provided_type]
+                except KeyError:
+                    providing_sources = []
+                    self._sources[provided_type] = providing_sources
+                providing_sources.append(source)
+
+    @property
+    def provides(self) -> AbstractSet[Type]:
+        return self._sources.keys()
+
+    def get_many(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> Iterable[T]:
+        try:
+            sources = self._sources[type]
+        except KeyError as error:
+            raise DataSource.unsupported(type) from error
+
+        for source in sources:
+            try:
+                return source.get_many(type, deepcopy(query), context)
+            except NotFoundError:
+                continue
+        raise NotFoundError()
+
+    def get(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> T:
+        try:
+            sources = self._sources[type]
+        except KeyError as error:
+            raise DataSource.unsupported(type) from error
+
+        for source in sources:
+            try:
+                return source.get(type, deepcopy(query), context)
+            except NotFoundError:
+                continue
+        raise NotFoundError()

@@ -9,9 +9,9 @@ with open(path.join(here, "README.rst"), encoding="UTF-8") as readme:
 
 setup(
     name="datapipelines",
-    version="0.0.1.dev3",
-    author="Rob Rua",
-    author_email="robrua@alumni.cmu.edu",
+    version="0.0.1.dev4",
+    author="Meraki Analytics Team",
+    author_email="team@merakianalytics.com",
     url="https://github.com/meraki-analytics/datapipelines",
     description="Caching abstraction layer for orchestrating multiple cache tiers",
     long_description=long_description,
@@ -29,7 +29,7 @@ setup(
     packages=find_packages(),
     zip_safe=True,
     install_requires=[
-        "networkx"
+        "merakicommons", "networkx"
     ],
     extras_require={
         "testing": ["pytest", "flake8"]
