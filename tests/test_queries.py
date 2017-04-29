@@ -434,3 +434,33 @@ def test_no_default_type():
     query = {"test": "dog"}
     assert valid(query)
     assert query == {"test": "dog"}
+
+
+def test_default_supplier():
+    x = 0
+
+    def supplier(query):
+        nonlocal x
+        x += 1
+        return "test"
+
+    valid = Query.can_have("test").with_default(supplier, str)
+
+    query = {"test": "dog"}
+    assert valid(query)
+    assert query == {"test": "dog"}
+    assert x == 0
+
+    with pytest.raises(QueryValidationError):
+        valid({"test": 1})
+    assert x == 0
+
+    query = {}
+    assert valid(query)
+    assert query == {"test": "test"}
+    assert x == 1
+
+    query = {}
+    assert valid(query)
+    assert query == {"test": "test"}
+    assert x == 2
