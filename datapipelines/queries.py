@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Type, MutableMapping, Any, Iterable, Union, Set
+from typing import Type, MutableMapping, Any, Iterable, Union
 
 
 class QueryValidationError(ValueError):
@@ -73,7 +73,7 @@ class _TypeNode(_ValidationNode):
     def __init__(self, key: str, types: Union[Type, Iterable[Type]], child: _DefaultValueNode = None) -> None:
         self.key = key
         self.child = child
-        self.types = set(types) if isinstance(types, Iterable) else {types}  # type: Set[Type]
+        self.types = set(types) if isinstance(types, Iterable) else {types}
 
     def __str__(self) -> str:
         return " OR ".join(type.__name__ for type in self.types)
