@@ -350,7 +350,6 @@ def test_can_have_as_any_of_and():
     assert valid({"test": 0, "dog": 0})
 
 
-
 def test_has_nested_and_or():
     valid = Query.has("test").and_("cat").or_("dog")
 

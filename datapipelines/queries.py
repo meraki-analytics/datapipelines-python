@@ -42,7 +42,7 @@ class _AndNode(_ValidationNode):
         # This is a little weird. We have to handle the case of can_have("x").and_("y") here.
         # Since the only type of Node that can return False rather than just raising a
         # QueryValidationError is a KeyNode that isn't required, or an OrNode whose children
-        # are all KeyNodes that aren't required,we can't short circuit on a False value. If 
+        # are all KeyNodes that aren't required,we can't short circuit on a False value. If
         # we have can_have("x").and_("y"), and only some are True, we want raise a
         # QueryValidationError. If all are True or all are False, everything's fine.
         all_true = True
