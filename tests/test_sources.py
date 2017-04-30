@@ -3,7 +3,7 @@ from typing import Type, TypeVar, Mapping, Any, Iterable, Generator
 
 import pytest
 
-from datapipelines import DataSource, PipelineContext, NotFoundError
+from datapipelines import DataSource, CompositeDataSource, PipelineContext, NotFoundError
 
 #########################################
 # Create simple DataSources for testing #
@@ -44,7 +44,7 @@ class SimpleWildcardDataSource(DataSource):
         return (value for _ in range(count))
 
 
-class SimpleDataSource(DataSource):
+class IntFloatDataSource(DataSource):
     @DataSource.dispatch
     def get(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> T:
         pass
@@ -96,6 +96,37 @@ class SimpleDataSource(DataSource):
         return (value for _ in range(count))
 
 
+class StringDataSource(DataSource):
+    @DataSource.dispatch
+    def get(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> T:
+        pass
+
+    @DataSource.dispatch
+    def get_many(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> Iterable[T]:
+        pass
+
+    @get.register(str)
+    def get_str(self, query: Mapping[str, Any], context: PipelineContext = None) -> str:
+        value = query.get(VALUE_KEY)
+
+        try:
+            return str(value)
+        except ValueError:
+            raise NotFoundError("Couldn't cast the query value to \"str\"")
+
+    @get_many.register(str)
+    def get_many_str(self, query: Mapping[str, Any], context: PipelineContext = None) -> Generator[str, None, None]:
+        value = query.get(VALUE_KEY)
+        count = query.get(COUNT_KEY)
+
+        try:
+            value = str(value)
+        except ValueError:
+            raise NotFoundError("Couldn't cast the query value to \"str\"")
+
+        return (value for _ in range(count))
+
+
 ########################
 # Unsupported Function #
 ########################
@@ -118,7 +149,7 @@ def test_unsupported():
 #####################
 
 def test_provides():
-    source = SimpleDataSource()
+    source = IntFloatDataSource()
 
     assert source.provides == {int, float}
 
@@ -135,7 +166,7 @@ def test_wildcard_provides():
 ################
 
 def test_get():
-    source = SimpleDataSource()
+    source = IntFloatDataSource()
 
     values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
 
@@ -158,7 +189,7 @@ def test_get():
 
 def test_get_unsupported():
     from datapipelines import UnsupportedError
-    source = SimpleDataSource()
+    source = IntFloatDataSource()
 
     query = {VALUE_KEY: "test"}
 
@@ -193,7 +224,7 @@ def test_wildcard_get():
 #####################
 
 def test_get_many():
-    source = SimpleDataSource()
+    source = IntFloatDataSource()
 
     values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
 
@@ -220,7 +251,7 @@ def test_get_many():
 
 def test_get_many_unsupported():
     from datapipelines import UnsupportedError
-    source = SimpleDataSource()
+    source = IntFloatDataSource()
 
     query = {VALUE_KEY: "test", COUNT_KEY: VALUES_COUNT}
 
@@ -252,3 +283,100 @@ def test_wildcard_get_many():
         for res in result:
             assert type(res) is float
             assert res == value
+
+
+#######################
+# CompositeDataSource #
+#######################
+
+def test_composite_provides():
+    source = CompositeDataSource({IntFloatDataSource(), StringDataSource()})
+    assert source.provides == {int, float, str}
+
+
+def test_composite_get():
+    source = CompositeDataSource({IntFloatDataSource(), StringDataSource()})
+
+    values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
+
+    for value in values:
+        query = {VALUE_KEY: value}
+        result = source.get(int, query)
+
+        assert type(result) is int
+        assert result == value
+
+    values = [random.uniform(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
+
+    for value in values:
+        query = {VALUE_KEY: value}
+        result = source.get(float, query)
+
+        assert type(result) is float
+        assert result == value
+
+    values = [str(random.uniform(-VALUES_MAX, VALUES_MAX)) for _ in range(VALUES_COUNT)]
+
+    for value in values:
+        query = {VALUE_KEY: value}
+        result = source.get(str, query)
+
+        assert type(result) is str
+        assert result == value
+
+
+def test_composite_get_unsupported():
+    from datapipelines import UnsupportedError
+    source = CompositeDataSource({IntFloatDataSource(), StringDataSource()})
+
+    query = {VALUE_KEY: bytes()}
+
+    with pytest.raises(UnsupportedError):
+        source.get(bytes, query)
+
+
+def test_composite_get_many():
+    source = CompositeDataSource({IntFloatDataSource(), StringDataSource()})
+
+    values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
+
+    for value in values:
+        query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
+        result = source.get_many(int, query)
+
+        assert type(result) is GENERATOR_CLASS
+        for res in result:
+            assert type(res) is int
+            assert res == value
+
+    values = [random.uniform(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
+
+    for value in values:
+        query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
+        result = source.get_many(float, query)
+
+        assert type(result) is GENERATOR_CLASS
+        for res in result:
+            assert type(res) is float
+            assert res == value
+
+    values = [str(random.uniform(-VALUES_MAX, VALUES_MAX)) for _ in range(VALUES_COUNT)]
+
+    for value in values:
+        query = {VALUE_KEY: value, COUNT_KEY: VALUES_COUNT}
+        result = source.get_many(str, query)
+
+        assert type(result) is GENERATOR_CLASS
+        for res in result:
+            assert type(res) is str
+            assert res == value
+
+
+def test_composite_get_many_unsupported():
+    from datapipelines import UnsupportedError
+    source = CompositeDataSource({IntFloatDataSource(), StringDataSource()})
+
+    query = {VALUE_KEY: bytes(), COUNT_KEY: VALUES_COUNT}
+
+    with pytest.raises(UnsupportedError):
+        source.get_many(bytes, query)

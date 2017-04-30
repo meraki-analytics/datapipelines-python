@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import singledispatch, update_wrapper
-from typing import TypeVar, Type, Callable, Any, Mapping, Collection, Iterable, Dict
+from typing import TypeVar, Type, Callable, Any, Mapping, Collection, Iterable, Dict, Set
 
 from merakicommons.cache import lazy_property
 
@@ -71,17 +71,26 @@ class CompositeDataTransformer(DataTransformer):
     def __init__(self, transformers: Iterable[DataTransformer]) -> None:
         self._transformers = {}
         for transformer in transformers:
-            for source, target in transformer.transforms.items():
-                try:
-                    current_transformer = self._transformers[(source, target)]
-                    if transformer.cost < current_transformer.cost:
+            for source, targets in transformer.transforms.items():
+                for target in targets:
+                    try:
+                        current_transformer = self._transformers[(source, target)]
+                        if transformer.cost < current_transformer.cost:
+                            self._transformers[(source, target)] = transformer
+                    except KeyError:
                         self._transformers[(source, target)] = transformer
-                except KeyError:
-                    self._transformers[(source, target)] = transformer
 
     @lazy_property
-    def transforms(self) -> Dict[Type, Collection[Type]]:
-        return dict(self._transformers.keys())
+    def transforms(self) -> Dict[Type, Set[Type]]:
+        transforms = {}
+        for source, target in self._transformers:
+            try:
+                current = transforms[source]
+            except KeyError:
+                current = set()
+                transforms[source] = current
+            current.add(target)
+        return transforms
 
     @lazy_property
     def cost(self) -> int:
