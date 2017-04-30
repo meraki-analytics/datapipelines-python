@@ -249,6 +249,7 @@ def test_composite_accepts():
     sink = CompositeDataSink({int_float, string})
     assert sink.accepts == {int, float, str}
 
+
 def test_composite_put():
     int_float = IntFloatDataSink()
     string = StringDataSink()
