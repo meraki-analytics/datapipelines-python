@@ -133,12 +133,23 @@ def test_repeat_as_as_any_of():
         Query.can_have("test").as_any_of({int, str}).as_(str)
 
 
-def test_or():
+def test_has_or():
     valid = Query.has("test").or_("dog").or_("foo")
 
     with pytest.raises(QueryValidationError):
         valid({})
 
+    assert valid({"test": "test"})
+    assert valid({"dog": "cat"})
+    assert valid({"foo": "bar"})
+    assert valid({"test": 0})
+    assert valid({"test": "test", "dog": "cat", "foo": "bar"})
+
+
+def test_can_have_or():
+    valid = Query.can_have("test").or_("dog").or_("foo")
+
+    assert valid({})
     assert valid({"test": "test"})
     assert valid({"dog": "cat"})
     assert valid({"foo": "bar"})
@@ -257,18 +268,24 @@ def test_has_as_and():
 
 
 def test_can_have_as_and():
-    # This acts the same as an or in the can_have context
     valid = Query.can_have("test").as_(str).and_("dog").as_(int)
 
     with pytest.raises(QueryValidationError):
         valid({"test": 0})
 
     with pytest.raises(QueryValidationError):
+        valid({"test": "test"})
+
+    with pytest.raises(QueryValidationError):
         valid({"dog": "cat"})
 
+    with pytest.raises(QueryValidationError):
+        valid({"dog": 0})
+
+    with pytest.raises(QueryValidationError):
+        valid({"test": 0, "dog": "cat"})
+
     assert valid({})
-    assert valid({"test": "test"})
-    assert valid({"dog": 0})
     assert valid({"test": "test", "dog": 0})
 
 
@@ -303,21 +320,35 @@ def test_has_as_any_of_and():
 
 
 def test_can_have_as_any_of_and():
-    # This acts the same as an or in the can_have context
     valid = Query.can_have("test").as_any_of({str, int}).and_("dog").as_any_of({str, int})
 
     with pytest.raises(QueryValidationError):
         valid({"test": 0.0})
 
     with pytest.raises(QueryValidationError):
+        valid({"test": 0})
+
+    with pytest.raises(QueryValidationError):
+        valid({"test": "test"})
+
+    with pytest.raises(QueryValidationError):
         valid({"dog": 0.0})
 
+    with pytest.raises(QueryValidationError):
+        valid({"dog": 0})
+
+    with pytest.raises(QueryValidationError):
+        valid({"dog": "cat"})
+
+    with pytest.raises(QueryValidationError):
+        valid({"test": 0.0, "dog": 0.0})
+
     assert valid({})
-    assert valid({"test": "test"})
-    assert valid({"test": 0})
-    assert valid({"dog": "cat"})
-    assert valid({"dog": 0})
+    assert valid({"test": "test", "dog": "cat"})
     assert valid({"test": "test", "dog": 0})
+    assert valid({"test": 0, "dog": "cat"})
+    assert valid({"test": 0, "dog": 0})
+
 
 
 def test_has_nested_and_or():
@@ -361,25 +392,37 @@ def test_has_nested_or_and():
 def test_can_have_nested_and_or():
     valid = Query.can_have("test").and_("cat").or_("dog")
 
+    with pytest.raises(QueryValidationError):
+        valid({"test": "test"})
+
+    with pytest.raises(QueryValidationError):
+        valid({"cat": "dog"})
+
+    with pytest.raises(QueryValidationError):
+        valid({"dog": "cat"})
+
     assert valid({})
-    assert valid({"test": "test"})
-    assert valid({"dog": "cat"})
-    assert valid({"cat": "dog"})
-    assert valid({"test": "test", "foo": "bar"})
-    assert valid({"test": "test", "cat": "dog"})
     assert valid({"test": "test", "dog": "cat"})
+    assert valid({"test": "test", "cat": "dog"})
+    assert valid({"test": "test", "dog": "cat", "cat": "dog"})
 
 
 def test_can_have_nested_or_and():
     valid = Query.can_have("test").or_("cat").and_("dog")
 
+    with pytest.raises(QueryValidationError):
+        valid({"dog": "cat"})
+
+    with pytest.raises(QueryValidationError):
+        valid({"cat": "dog"})
+
     assert valid({})
     assert valid({"test": "test"})
-    assert valid({"dog": "cat"})
-    assert valid({"cat": "dog"})
+    assert valid({"dog": "cat", "cat": "dog"})
     assert valid({"test": "test", "foo": "bar"})
     assert valid({"test": "test", "cat": "dog"})
     assert valid({"test": "test", "dog": "cat"})
+    assert valid({"test": "test", "dog": "cat", "cat": "dog"})
 
 
 def test_also():

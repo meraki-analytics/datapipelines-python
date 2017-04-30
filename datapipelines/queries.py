@@ -17,6 +17,10 @@ class WrongValueTypeError(QueryValidationError):
     pass
 
 
+class BoundKeyExistenceError(QueryValidationError):
+    pass
+
+
 class QueryValidatorStructureError(AttributeError):
     pass
 
@@ -34,8 +38,23 @@ class _AndNode(_ValidationNode):
     def __str__(self) -> str:
         return " AND ".join(str(child) for child in self.children)
 
-    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
-        return all(child.evaluate(query, context) for child in self.children)
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
+        # This is a little weird. We have to handle the case of can_have("x").and_("y") here.
+        # Since the only type of Node that can return False rather than just raising a
+        # QueryValidationError is a KeyNode that isn't required, or an OrNode whose children
+        # are all KeyNodes that aren't required,we can't short circuit on a False value. If 
+        # we have can_have("x").and_("y"), and only some are True, we want raise a
+        # QueryValidationError. If all are True or all are False, everything's fine.
+        all_true = True
+        all_false = True
+        for child in self.children:
+            is_true = child.evaluate(query, context)
+            all_true = all_true and is_true
+            all_false = all_false and not is_true
+
+        if all_false or all_true:
+            return True
+        raise BoundKeyExistenceError("Query must have all or none of the elements joined with \"and\" in a \"can_have\" statement!")
 
 
 class _OrNode(_ValidationNode):
@@ -46,15 +65,23 @@ class _OrNode(_ValidationNode):
         return " OR ".join(str(child) for child in self.children)
 
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
-        # We can't short circuit this because we want to raise any WrongValueTypeError that could occur
+        # We can't short circuit this because we want to raise any WrongValueTypeError or BoundKeyExistenceError that could occur.
+        # We count failures because the only other node than can return False is a KeyNode that isn't required. An OrNode is only
+        # allowed to return False when all its children are False KeyNodes. The AndNodes handle raising an error if a can_have
+        # expression with ands and ors fails.
         errors = []
+        failure_count = 0
         result = False
         for child in self.children:
             try:
-                result = child.evaluate(query, context) or result
-            except MissingKeyError as error:
+                is_true = child.evaluate(query, context)
+                if not is_true:
+                    failure_count += 1
+                result = is_true or result
+            except (MissingKeyError, BoundKeyExistenceError) as error:
                 errors.append(error)
-        if len(errors) == len(self.children):
+                failure_count += 1
+        if failure_count == len(self.children) and len(errors) > 0:
             raise errors[0]
         return result
 
@@ -68,7 +95,7 @@ class _DefaultValueNode(_ValidationNode):
     def __str__(self) -> str:
         return self.value
 
-    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
         if self.supplies_type:
             query[self.key] = self.value(query, context)
         else:
@@ -85,7 +112,7 @@ class _TypeNode(_ValidationNode):
     def __str__(self) -> str:
         return " OR ".join(type.__name__ for type in self.types)
 
-    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
         try:
             value = query[self.key]
             for type in self.types:
@@ -97,12 +124,12 @@ class _TypeNode(_ValidationNode):
             raise WrongValueTypeError("{key} must be of type {type} in query!".format(key=self.key, type=self))
         except KeyError:
             if self.child:
-                return self.child.evaluate(query, context)
+                self.child.evaluate(query, context)
         return True
 
 
 class _KeyNode(_ValidationNode):
-    def __init__(self, key: str, required: bool = True, child: Union[_TypeNode, _OrNode, _AndNode] = None) -> None:
+    def __init__(self, key: str, required: bool = True, child: _TypeNode = None) -> None:
         self.key = key
         self.required = required
         self.child = child
@@ -111,11 +138,12 @@ class _KeyNode(_ValidationNode):
         return self.key
 
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
-        if self.required and self.key not in query:
+        has_key = self.key in query
+        if self.required and not has_key:
             raise MissingKeyError("{key} must be in query!".format(key=self.key))
         if self.child:
-            return self.child.evaluate(query, context)
-        return True
+            self.child.evaluate(query, context)
+        return has_key
 
 
 class QueryValidator(object):
@@ -124,7 +152,8 @@ class QueryValidator(object):
         self._current = None  # type: _KeyNode
         self._parent = None  # type: Union[_AndNode, _OrNode]
 
-    def __call__(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
+    def __call__(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
+        # This always returns true because it'll raise a QueryValidationError if the query wasn't valid
         return self._root.evaluate(query, context)
 
     def has(self, key: str) -> "QueryValidator":
