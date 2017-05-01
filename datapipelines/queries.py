@@ -36,9 +36,31 @@ class _ValidationNode(ABC):
         pass
 
 
+class _RootNode(_ValidationNode):
+    def __init__(self, children: Iterable[Union["_KeyNode", "_AndNode", "_OrNode"]] = None) -> None:
+        if children is None:
+            children = list()
+        self.children = list(children)
+
+    def __str__(self) -> str:
+        return " ALSO ".join(str(child) for child in self.children)
+
+    @property
+    def falsifiable(self):
+        return False
+
+    def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
+        # This always returns true because it'll raise a QueryValidationError if the query wasn't
+        # valid. We also don't want normal AND behavior at this level so we just evaluate the
+        # children and return True
+        for child in self.children:
+            child.evaluate(query, context)
+        return True
+
+
 class _AndNode(_ValidationNode):
     def __init__(self, children: Iterable[Union["_KeyNode", "_AndNode", "_OrNode"]]) -> None:
-        self.children = set(children)
+        self.children = list(children)
 
     def __str__(self) -> str:
         return " AND ".join(str(child) for child in self.children)
@@ -69,7 +91,7 @@ class _AndNode(_ValidationNode):
 
 class _OrNode(_ValidationNode):
     def __init__(self, children: Iterable[Union["_KeyNode", "_AndNode", "_OrNode"]]) -> None:
-        self.children = set(children)
+        self.children = list(children)
 
     def __str__(self) -> str:
         return " OR ".join(str(child) for child in self.children)
@@ -174,12 +196,11 @@ class _KeyNode(_ValidationNode):
 
 class QueryValidator(object):
     def __init__(self) -> None:
-        self._root = _AndNode(set())
+        self._root = _RootNode()
         self._current = None  # type: _KeyNode
         self._parent = None  # type: Union[_AndNode, _OrNode]
 
     def __call__(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
-        # This always returns true because it'll raise a QueryValidationError if the query wasn't valid
         return self._root.evaluate(query, context)
 
     def has(self, key: str) -> "QueryValidator":
@@ -187,7 +208,7 @@ class QueryValidator(object):
             raise QueryValidatorStructureError("A key is already selected! Try using \"also\" before \"has\".")
 
         has_node = _KeyNode(key, True)
-        self._root.children.add(has_node)
+        self._root.children.append(has_node)
         self._current = has_node
         self._parent = self._root
         return self
@@ -197,7 +218,7 @@ class QueryValidator(object):
             raise QueryValidatorStructureError("A key is already selected! Try using \"also\" before \"can_have\".")
 
         has_node = _KeyNode(key, False)
-        self._root.children.add(has_node)
+        self._root.children.append(has_node)
         self._current = has_node
         self._parent = self._root
         return self
@@ -227,11 +248,11 @@ class QueryValidator(object):
         else:
             or_node = _OrNode({self._current})
             self._parent.children.remove(self._current)
-            self._parent.children.add(or_node)
+            self._parent.children.append(or_node)
             self._parent = or_node
 
         has_node = _KeyNode(key, self._current.required)
-        or_node.children.add(has_node)
+        or_node.children.append(has_node)
         self._current = has_node
         return self
 
@@ -244,11 +265,11 @@ class QueryValidator(object):
         else:
             and_node = _AndNode({self._current})
             self._parent.children.remove(self._current)
-            self._parent.children.add(and_node)
+            self._parent.children.append(and_node)
             self._parent = and_node
 
         has_node = _KeyNode(key, self._current.required)
-        and_node.children.add(has_node)
+        and_node.children.append(has_node)
         self._current = has_node
         return self
 
