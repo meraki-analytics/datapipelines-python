@@ -30,6 +30,11 @@ class _ValidationNode(ABC):
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         pass
 
+    @property
+    @abstractmethod
+    def falsifiable(self):
+        pass
+
 
 class _AndNode(_ValidationNode):
     def __init__(self, children: Iterable[Union["_KeyNode", "_AndNode", "_OrNode"]]) -> None:
@@ -38,21 +43,26 @@ class _AndNode(_ValidationNode):
     def __str__(self) -> str:
         return " AND ".join(str(child) for child in self.children)
 
+    @property
+    def falsifiable(self):
+        return False
+
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
         # This is a little weird. We have to handle the case of can_have("x").and_("y") here.
         # Since the only type of Node that can return False rather than just raising a
         # QueryValidationError is a KeyNode that isn't required, or an OrNode whose children
-        # are all KeyNodes that aren't required,we can't short circuit on a False value. If
+        # are all KeyNodes that aren't required, we can't short circuit on a False value. If
         # we have can_have("x").and_("y"), and only some are True, we want raise a
         # QueryValidationError. If all are True or all are False, everything's fine.
         all_true = True
-        all_false = True
+        all_possible_false = True
         for child in self.children:
             is_true = child.evaluate(query, context)
             all_true = all_true and is_true
-            all_false = all_false and not is_true
+            if child.falsifiable:
+                all_possible_false = all_possible_false and not is_true
 
-        if all_false or all_true:
+        if all_possible_false or all_true:
             return True
         raise BoundKeyExistenceError("Query must have all or none of the elements joined with \"and\" in a \"can_have\" statement!")
 
@@ -63,6 +73,10 @@ class _OrNode(_ValidationNode):
 
     def __str__(self) -> str:
         return " OR ".join(str(child) for child in self.children)
+
+    @property
+    def falsifiable(self):
+        return True
 
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         # We can't short circuit this because we want to raise any WrongValueTypeError or BoundKeyExistenceError that could occur.
@@ -95,6 +109,10 @@ class _DefaultValueNode(_ValidationNode):
     def __str__(self) -> str:
         return self.value
 
+    @property
+    def falsifiable(self):
+        return False
+
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
         if self.supplies_type:
             query[self.key] = self.value(query, context)
@@ -111,6 +129,10 @@ class _TypeNode(_ValidationNode):
 
     def __str__(self) -> str:
         return " OR ".join(type.__name__ for type in self.types)
+
+    @property
+    def falsifiable(self):
+        return False
 
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> True:
         try:
@@ -136,6 +158,10 @@ class _KeyNode(_ValidationNode):
 
     def __str__(self) -> str:
         return self.key
+
+    @property
+    def falsifiable(self):
+        return not self.required
 
     def evaluate(self, query: MutableMapping[str, Any], context: PipelineContext = None) -> bool:
         has_key = self.key in query
