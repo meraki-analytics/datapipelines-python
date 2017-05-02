@@ -364,7 +364,7 @@ class DataPipeline(object):
                         transform = t
                         cost = c
                         source_type = provided_type
-                except NetworkXNoPath:
+                except NoConversionError:
                     pass
 
             if transform is None:
