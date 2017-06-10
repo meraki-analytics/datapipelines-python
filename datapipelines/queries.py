@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from enum import Enum
+from copy import deepcopy
 from typing import Type, MutableMapping, Any, Iterable, Union, Callable
 
 from .pipelines import PipelineContext
@@ -139,7 +140,7 @@ class _DefaultValueNode(_ValidationNode):
         if self.supplies_type:
             query[self.key] = self.value(query, context)
         else:
-            query[self.key] = self.value
+            query[self.key] = deepcopy(self.value)
         return True
 
 
