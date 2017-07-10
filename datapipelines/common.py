@@ -14,7 +14,7 @@ class NotFoundError(ValueError):
 class PipelineContext(dict):
     class Keys(object):
         PIPELINE = "pipeline"
-        TTL = "time-to-live"
+        EXPIRATION = "expires"
 
 
 T = TypeVar("T")
