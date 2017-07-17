@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from enum import Enum
 from copy import deepcopy
 from typing import Type, MutableMapping, Any, Iterable, Union, Callable
+from functools import wraps
 
 from .pipelines import PipelineContext
 
@@ -309,3 +310,17 @@ class Query(dict):
     @staticmethod
     def can_have(key: str) -> QueryValidator:
         return QueryValidator().can_have(key)
+
+
+def validate_query(validator: QueryValidator, *pre_transforms: Callable[[MutableMapping], None]) -> Callable[[Callable[[Any, MutableMapping[str, Any], PipelineContext], Union[Any, Iterable[Any]]]], Callable[[Any, MutableMapping[str, Any], PipelineContext], Union[Any, Iterable[Any]]]]:
+    def wrapper(method: Callable[[Any, MutableMapping[str, Any], PipelineContext], Union[Any, Iterable[Any]]]) -> Callable[[Any, MutableMapping[str, Any], PipelineContext], Union[Any, Iterable[Any]]]:
+        @wraps(method)
+        def wrapped(self: Any, query: MutableMapping[str, Any], context: PipelineContext = None):
+            for transform in pre_transforms:
+                transform(query)
+
+            validator(query)
+            return method(self, query, context)
+
+        return wrapped
+    return wrapper

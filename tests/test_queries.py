@@ -1,6 +1,6 @@
 import pytest
 
-from datapipelines import Query, QueryValidationError, QueryValidatorStructureError
+from datapipelines import Query, QueryValidationError, QueryValidatorStructureError, validate_query
 
 
 def test_has():
@@ -506,3 +506,27 @@ def test_default_supplier():
     assert valid(query)
     assert query == {"test": "test"}
     assert x == 2
+
+
+def test_validate_decorator():
+    def pre_transform(query):
+        if "test0" in query:
+            query["test1"] = query["test0"]
+
+    def pre_transform2(query):
+        if "test1" in query:
+            query["test2"] = int(query["test1"])
+
+    validator = Query.has("test1").as_(str).also.has("test2").as_(int)
+
+    @validate_query(validator, pre_transform, pre_transform2)
+    def get(self, query, context=None):
+        return query["test2"]
+
+    with pytest.raises(QueryValidationError):
+        get(None, {"cat": "dog"})
+
+    with pytest.raises(ValueError):
+        get(None, {"test1": "one"})
+
+    assert get(None, {"test0": "1"}) == 1
