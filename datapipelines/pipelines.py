@@ -213,7 +213,7 @@ class _SourceHandler(Generic[S, T]):
 
             yield item
 
-    def get_many(self, query: Mapping[str, Any], context: PipelineContext = None, streaming: bool = True) -> Iterable[T]:
+    def get_many(self, query: Mapping[str, Any], context: PipelineContext = None, streaming: bool = False) -> Iterable[T]:
         """Gets a query from the data source, where the query contains multiple elements to be extracted.
 
         1) Extracts the query from the data source.
@@ -224,7 +224,7 @@ class _SourceHandler(Generic[S, T]):
         Args:
             query: The query being requested.
             context: The context for the extraction (mutable).
-            streaming: Specifies whether the results should be returned as a generator (default True).
+            streaming: Specifies whether the results should be returned as a generator (default False).
 
         Returns:
             The requested objects or a generator of the objects if streaming is True.
@@ -461,7 +461,7 @@ class DataPipeline(object):
 
         raise NotFoundError("No source returned a query result!")
 
-    def get_many(self, type: Type[T], query: Mapping[str, Any], streaming: bool = True) -> Iterable[T]:
+    def get_many(self, type: Type[T], query: Mapping[str, Any], streaming: bool = False) -> Iterable[T]:
         """Gets a query from the data pipeline, which contains a request for multiple objects.
 
         1) Extracts the query the sequence of data sources.
@@ -472,7 +472,7 @@ class DataPipeline(object):
         Args:
             query: The query being requested (contains a request for multiple objects).
             context: The context for the extraction (mutable).
-            streaming: Specifies whether the results should be returned as a generator (default True).
+            streaming: Specifies whether the results should be returned as a generator (default False).
 
         Returns:
             The requested objects or a generator of the objects if streaming is True.
