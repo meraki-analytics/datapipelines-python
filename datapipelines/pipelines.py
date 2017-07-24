@@ -309,91 +309,73 @@ class DataPipeline(object):
 
         return partial(_transform, transformer_chain=chain), cost
 
-    def _sink_handler(self, sink: DataSink, *target_types: Type) -> Tuple[_SinkHandler, int]:
-        for index, target_type in enumerate(target_types):
-            if TYPE_WILDCARD is sink.accepts or target_type in sink.accepts:
-                LOGGER.info("Sink \"{sink}\" accepts \"{target_type}\" directly".format(sink=sink, target_type=target_type.__name__))
-                # noinspection PyTypeChecker
-                return _SinkHandler(sink, target_type, _identity), index
+    def _best_transform_from(self, source_type: Type[S], target_types: Collection[Type]) -> Tuple[Callable[[S], Any], Type]:
+        best = None
+        best_cost = _MAX_TRANSFORM_COST
+        to_type = None
+        for target_type in target_types:
+            try:
+                transform, cost = self._transform(source_type, target_type)
+                if cost < best_cost:
+                    best = transform
+                    best_cost = cost
+                    to_type = target_type
+            except NoConversionError:
+                pass
+        if best is None:
+            raise NoConversionError("Pipeline can't convert \"{source_type}\" to any of \"{target_types}\"".format(source_type=source_type, target_types=target_types))
+        return best, to_type
 
-        transform = None
-        cost = _MAX_TRANSFORM_COST
-        type_index = -1
-        accept_type = None
+    def _best_transform_to(self, target_type: Type[T], source_types: Collection[Type]) -> Tuple[Callable[[T], Any], Type]:
+        best = None
+        best_cost = _MAX_TRANSFORM_COST
+        from_type = None
+        for source_type in source_types:
+            try:
+                transform, cost = self._transform(source_type, target_type)
+                if cost < best_cost:
+                    best = transform
+                    best_cost = cost
+                    from_type = source_type
+            except NoConversionError:
+                pass
+        if best is None:
+            raise NoConversionError("Pipeline can't convert from any of \"{source_types}\" to \"{target_type}\"".format(source_types=source_types, target_type=target_type))
+        return best, from_type
 
-        accepts = sink.accepts  # type: Collection[Type]
-        for index, target_type in enumerate(target_types):
-            LOGGER.info("Attempting to find a transformer chain from \"{target_type}\" to a type sink \"{sink}\" accepts".format(target_type=target_type.__name__, sink=sink))
-            for accepted_type in accepts:
+    def _create_sink_handlers(self, type: Type[T], targets: Collection[DataSink]) -> Set[DataSink]:
+        sink_handlers = set()
+        for sink in targets:
+            if TYPE_WILDCARD in sink.accepts or type in sink.accepts:
+                sink_handlers.add(_SinkHandler(sink, type, _identity))
+            else:
                 try:
-                    # noinspection PyTypeChecker
-                    t, c = self._transform(target_type, accepted_type)
-                    LOGGER.info("Found a transformer chain from \"{target_type}\" to \"{accepted_type}\" at cost {cost}".format(target_type=target_type.__name__, accepted_type=accepted_type.__name__, cost=c))
-                    if c < cost:
-                        transform = t
-                        cost = c
-                        type_index = index
-                        accept_type = accepted_type
-                except NetworkXNoPath:
-                    pass
-
-        if transform is None:
-            names = [target_type.__name__ for target_type in target_types]
-            raise NoConversionError("Sink can't accept any of {names}!".format(names=names))
-
-        LOGGER.info("Taking cheapest transformer chain for sink \"{sink}\" (from \"{target_type}\") at cost {cost}".format(sink=sink, target_type=target_types[type_index].__name__, cost=cost))
-
-        return _SinkHandler(sink, accept_type, transform), type_index
-
-    def _source_handler(self, source: DataSource, sinks: Collection[DataSink], target_type: Type[T]) -> _SourceHandler:
-        if TYPE_WILDCARD is source.provides or target_type in source.provides:
-            LOGGER.info("Source \"{source}\" provides \"{target_type}\" directly".format(source=source, target_type=target_type.__name__))
-            transform = _identity
-            source_type = target_type
-        else:
-            transform = None
-            cost = _MAX_TRANSFORM_COST
-            source_type = None
-
-            LOGGER.info("Attempting to find a transformer chain to \"{target_type}\" from a type source \"{source}\" provides".format(target_type=target_type.__name__, source=source))
-            for provided_type in source.provides:
-                try:
-                    t, c = self._transform(provided_type, target_type)
-                    LOGGER.info("Found a transformer chain from \"{provided_type}\" to \"{target_type}\" at cost {cost}".format(provided_type=provided_type.__name__, target_type=target_type.__name__, cost=c))
-                    if c < cost:
-                        transform = t
-                        cost = c
-                        source_type = provided_type
+                    transform, store_type = self._best_transform_from(type, sink.accepts)
+                    sink_handlers.add(_SinkHandler(sink, store_type, transform))
                 except NoConversionError:
                     pass
 
-            if transform is None:
-                raise NoConversionError("Source can't provide \"{target_type}\"!".format(target_type=target_type.__name__))
+        return sink_handlers
 
-            LOGGER.info("Taking cheapest transformer chain for source \"{source}\" (to \"{target_type}\") at cost {cost}".format(source=source, target_type=target_type.__name__, cost=cost))
+    def _create_source_handlers(self, type: Type[T]) -> List[_SourceHandler]:
+        source_handlers = []
+        for source, targets in self._sources:
+            if TYPE_WILDCARD in source.provides or type in source.provides:
+                sink_handlers = self._create_sink_handlers(type, targets)
+                source_handlers.append(_SourceHandler(source, type, _identity, {sink_handler: False for sink_handler in sink_handlers}))
+            else:
+                try:
+                    transform, source_type = self._best_transform_to(type, source.provides)
+                    sink_handlers = {sink_handler: False for sink_handler in self._create_sink_handlers(source_type, targets)}
+                    sink_handlers.update({sink_handler: True for sink_handler in self._create_sink_handlers(type, targets)})
+                    source_handlers.append(_SourceHandler(source, source_type, transform, sink_handlers))
+                except NoConversionError:
+                    pass
 
-        LOGGER.info("Building SinkHandlers for source \"{source}\" for target type \"{target_type}\"".format(source=source, target_type=target_type.__name__))
-        target_sinks = {}
-        for sink in sinks:
-            try:
-                handler, index = self._sink_handler(sink, source_type, target_type)
-                do_transform = index == 1
-                target_sinks[handler] = do_transform
-            except NoConversionError:
-                pass
-        LOGGER.info("Built SinkHandlers for source \"{source}\" for target type \"{target_type}\"".format(source=source, target_type=target_type.__name__))
-
-        return _SourceHandler(source, source_type, transform, target_sinks)
+        return source_handlers
 
     def _get_handlers(self, type: Type[T]) -> List[_SourceHandler]:
-        handlers = []  # type: List[_SourceHandler]
-
-        for source, sinks in self._sources:
-            try:
-                handler = self._source_handler(source, sinks, type)
-                handlers.append(handler)
-            except NoConversionError:
-                pass
+        handlers = self._create_source_handlers(type)
 
         if not handlers:
             raise NoConversionError("No source provides \"{type}\"".format(type=type.__name__))
@@ -401,14 +383,7 @@ class DataPipeline(object):
         return handlers
 
     def _put_handlers(self, type: Type[T]) -> Set[_SinkHandler]:
-        handlers = set()
-
-        for sink in self._sinks:
-            try:
-                handler = self._sink_handler(sink, type)[0]
-                handlers.add(handler)
-            except NoConversionError:
-                pass
+        handlers = self._create_sink_handlers(type, self._sinks)
 
         if not handlers:
             raise NoConversionError("No sink accepts \"{type}\"".format(type=type.__name__))

@@ -461,104 +461,6 @@ def test_pipeline_transform_impossible():
         pipeline._transform(int, str)
 
 
-def test_sink_handler():
-    int_source = IntSource()
-    float_store = FloatStore()
-    int_float = IntFloatTransformer()
-    float_int = FloatIntTransformer()
-    string = StringTransformer()
-
-    elements = [float_store, int_source]
-    transformers = {int_float, float_int, string}
-
-    # noinspection PyTypeChecker
-    pipeline = DataPipeline(elements, transformers)
-
-    handler, index = pipeline._sink_handler(float_store, str, int)
-    assert index == 0
-    assert type(handler) is _SinkHandler
-
-    assert handler._sink is float_store
-    assert handler._store_type is float
-
-    values = [str(random.uniform(-VALUES_MAX, VALUES_MAX)) for _ in range(VALUES_COUNT)]
-
-    for value in values:
-        assert type(handler._transform(data=value)) is float
-
-
-def test_sink_handler_impossible():
-    int_source = IntSource()
-    float_store = FloatStore()
-    int_float = IntFloatTransformer()
-
-    elements = [float_store, int_source]
-    transformers = {int_float}
-
-    # noinspection PyTypeChecker
-    pipeline = DataPipeline(elements, transformers)
-
-    with pytest.raises(NoConversionError):
-        pipeline._sink_handler(float_store, bool)
-
-
-def test_source_handler():
-    int_source = IntSource()
-    float_store = FloatStore()
-    int_float = IntFloatTransformer()
-    float_int = FloatIntTransformer()
-    string = StringTransformer()
-
-    elements = [float_store, int_source]
-    transformers = {int_float, float_int, string}
-
-    # noinspection PyTypeChecker
-    pipeline = DataPipeline(elements, transformers)
-    sinks = {float_store}
-
-    # noinspection PyTypeChecker
-    handler = pipeline._source_handler(int_source, sinks, str)
-    assert type(handler) is _SourceHandler
-    assert handler._source is int_source
-    assert handler._source_type is int
-
-    values = [random.randint(-VALUES_MAX, VALUES_MAX) for _ in range(VALUES_COUNT)]
-
-    for value in values:
-        assert type(handler._transform(data=value)) is str
-
-    assert len(handler._before_transform) == 1
-    assert len(handler._after_transform) == 0
-
-    sink_handler = list(handler._before_transform)[0]
-
-    assert sink_handler._sink is float_store
-    assert sink_handler._store_type is float
-
-    for value in values:
-        assert type(sink_handler._transform(data=value)) is float
-
-
-def test_source_handler_impossible():
-    int_source = IntSource()
-    float_int = FloatIntTransformer()
-
-    elements = [int_source]
-    transformers = {float_int}
-
-    # noinspection PyTypeChecker
-    pipeline = DataPipeline(elements, transformers)
-    sinks = set()
-
-    with pytest.raises(NoConversionError):
-        # noinspection PyTypeChecker
-        pipeline._source_handler(int_source, sinks, str)
-
-    with pytest.raises(NoConversionError):
-        # noinspection PyTypeChecker
-        pipeline._source_handler(int_source, sinks, float)
-
-
 def test_get_handlers():
     int_source = IntSource()
     float_store = FloatStore()
@@ -594,7 +496,7 @@ def test_get_handlers():
     assert len(handlers[0]._after_transform) == 0
 
     assert len(handlers[1]._before_transform) == 1
-    assert len(handlers[1]._after_transform) == 0
+    assert len(handlers[1]._after_transform) == 1
 
     sink_handler = list(handlers[1]._before_transform)[0]
 
