@@ -9,7 +9,7 @@ with open(path.join(here, "README.rst"), encoding="UTF-8") as readme:
 
 setup(
     name="datapipelines",
-    version="0.0.1.dev4",
+    version="0.0.1",
     author="Meraki Analytics Team",
     author_email="team@merakianalytics.com",
     url="https://github.com/meraki-analytics/datapipelines",
