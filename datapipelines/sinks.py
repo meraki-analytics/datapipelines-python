@@ -13,7 +13,7 @@ class DataSink(ABC):
         return UnsupportedError("The type \"{type}\" is not supported by this DataSink!".format(type=type.__name__))
 
     @property
-    def accepts(self) -> Union[Iterable[Type[T]], Type[Any]]:
+    def accepts(self):  # type: Union[Iterable[Type[T]], Type[Any]]
         """The types of objects the data sink can store."""
         types = set()
         any_dispatch = False

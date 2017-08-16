@@ -16,7 +16,7 @@ class DataSource(ABC):
         return UnsupportedError("The type \"{type}\" is not supported by this DataSource!".format(type=type.__name__))
 
     @lazy_property
-    def provides(self) -> Union[Iterable[Type[T]], Type[Any]]:
+    def provides(self):  # type: Union[Iterable[Type[T]], Type[Any]]
         """The types of objects the data store provides."""
         types = set()
         any_dispatch = False
