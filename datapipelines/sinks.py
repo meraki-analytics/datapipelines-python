@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import singledispatch, update_wrapper
-from typing import TypeVar, Type, Any, Iterable, Collection, Callable, Union, AbstractSet
+from typing import TypeVar, Type, Any, Iterable, Callable, Union, AbstractSet
 
 from .common import PipelineContext, UnsupportedError, TYPE_WILDCARD
 
@@ -13,7 +13,7 @@ class DataSink(ABC):
         return UnsupportedError("The type \"{type}\" is not supported by this DataSink!".format(type=type.__name__))
 
     @property
-    def accepts(self) -> Union[Collection[Type[T]], Type[Any]]:
+    def accepts(self) -> Union[Iterable[Type[T]], Type[Any]]:
         """The types of objects the data sink can store."""
         types = set()
         any_dispatch = False

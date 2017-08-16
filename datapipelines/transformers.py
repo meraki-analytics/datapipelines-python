@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from functools import singledispatch, update_wrapper
-from typing import TypeVar, Type, Callable, Any, Mapping, Collection, Iterable, Dict, Set
+from typing import TypeVar, Type, Callable, Any, Mapping, Iterable, Dict, Set
 
 from merakicommons.cache import lazy_property
 
@@ -16,7 +16,7 @@ class DataTransformer(ABC):
         return UnsupportedError("The conversion from type \"{from_type}\" to type \"{to_type}\" is not supported by this DataTransformer!".format(from_type=value.__class__.__name__, to_type=target_type.__name__))
 
     @property
-    def transforms(self) -> Mapping[Type, Collection[Type]]:
+    def transforms(self) -> Mapping[Type, Iterable[Type]]:
         """The available data transformers."""
         try:
             return getattr(self.__class__, "transform")._transforms

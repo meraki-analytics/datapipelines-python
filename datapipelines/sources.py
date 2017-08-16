@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from functools import singledispatch, update_wrapper
-from typing import TypeVar, Type, Mapping, Any, Iterable, Callable, Collection, Union, AbstractSet
+from typing import TypeVar, Type, Mapping, Any, Iterable, Callable, Union, AbstractSet
 
 from merakicommons.cache import lazy_property
 
@@ -16,7 +16,7 @@ class DataSource(ABC):
         return UnsupportedError("The type \"{type}\" is not supported by this DataSource!".format(type=type.__name__))
 
     @lazy_property
-    def provides(self) -> Union[Collection[Type[T]], Type[Any]]:
+    def provides(self) -> Union[Iterable[Type[T]], Type[Any]]:
         """The types of objects the data store provides."""
         types = set()
         any_dispatch = False

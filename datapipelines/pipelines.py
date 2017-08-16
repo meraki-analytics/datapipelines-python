@@ -1,4 +1,4 @@
-from typing import Type, TypeVar, Sequence, Union, Collection, Callable, Any, List, Set, Generic, Mapping, Iterable, Tuple, Generator
+from typing import Type, TypeVar, Sequence, Union, Callable, Any, List, Set, Generic, Mapping, Iterable, Tuple, Generator
 from functools import partial
 from itertools import tee
 from logging import getLogger
@@ -20,7 +20,7 @@ _TRANSFORMER = "transformer"
 _MAX_TRANSFORM_COST = 10000000  # (つ͡°͜ʖ͡°)つ
 
 
-def _build_type_graph(sources: Collection[DataSource], sinks: Collection[DataSink], transformers: Collection[DataTransformer]) -> DiGraph:
+def _build_type_graph(sources: Iterable[DataSource], sinks: Iterable[DataSink], transformers: Iterable[DataTransformer]) -> DiGraph:
     graph = DiGraph()
 
     for source in sources:
@@ -29,7 +29,7 @@ def _build_type_graph(sources: Collection[DataSource], sinks: Collection[DataSin
             LOGGER.info("Ignoring \"{source}\" in type graph, as it provides the wildcard type".format(source=source))
             continue
 
-        provides = source.provides  # type: Collection[Type]
+        provides = source.provides  # type: Iterable[Type]
         for provided_type in provides:
             try:
                 provided_type_sources = graph[provided_type][_SOURCES]
@@ -46,7 +46,7 @@ def _build_type_graph(sources: Collection[DataSource], sinks: Collection[DataSin
             LOGGER.info("Ignoring \"{sink}\" in type graph, as it accepts the wildcard type".format(sink=sink))
             continue
         else:
-            accepts = sink.accepts  # type: Collection[Type]
+            accepts = sink.accepts  # type: Iterable[Type]
 
         for accepted_type in accepts:
             try:
@@ -233,7 +233,7 @@ class _SourceHandler(Generic[S, T]):
         LOGGER.info("Got results \"{result}\" from query \"{query}\" of source \"{source}\"".format(result=result, query=query, source=self._source))
 
         if not streaming:
-            LOGGER.info("Non-streaming get_many request. Ensuring results \"{result}\" are a Collection".format(result=result))
+            LOGGER.info("Non-streaming get_many request. Ensuring results \"{result}\" are a Iterable".format(result=result))
             result = list(result)
 
             LOGGER.info("Sending results \"{result}\" to sinks before converting".format(result=result))
@@ -254,7 +254,7 @@ class _SourceHandler(Generic[S, T]):
 
 
 class DataPipeline(object):
-    def __init__(self, elements: Sequence[Union[DataSource, DataSink]], transformers: Collection[DataTransformer] = None) -> None:
+    def __init__(self, elements: Sequence[Union[DataSource, DataSink]], transformers: Iterable[DataTransformer] = None) -> None:
         """Initializes a data pipeline.
 
         Args:
@@ -309,7 +309,7 @@ class DataPipeline(object):
 
         return partial(_transform, transformer_chain=chain), cost
 
-    def _best_transform_from(self, source_type: Type[S], target_types: Collection[Type]) -> Tuple[Callable[[S], Any], Type]:
+    def _best_transform_from(self, source_type: Type[S], target_types: Iterable[Type]) -> Tuple[Callable[[S], Any], Type]:
         best = None
         best_cost = _MAX_TRANSFORM_COST
         to_type = None
@@ -326,7 +326,7 @@ class DataPipeline(object):
             raise NoConversionError("Pipeline can't convert \"{source_type}\" to any of \"{target_types}\"".format(source_type=source_type, target_types=target_types))
         return best, to_type
 
-    def _best_transform_to(self, target_type: Type[T], source_types: Collection[Type]) -> Tuple[Callable[[T], Any], Type]:
+    def _best_transform_to(self, target_type: Type[T], source_types: Iterable[Type]) -> Tuple[Callable[[T], Any], Type]:
         best = None
         best_cost = _MAX_TRANSFORM_COST
         from_type = None
@@ -343,7 +343,7 @@ class DataPipeline(object):
             raise NoConversionError("Pipeline can't convert from any of \"{source_types}\" to \"{target_type}\"".format(source_types=source_types, target_type=target_type))
         return best, from_type
 
-    def _create_sink_handlers(self, type: Type[T], targets: Collection[DataSink]) -> Set[DataSink]:
+    def _create_sink_handlers(self, type: Type[T], targets: Iterable[DataSink]) -> Set[DataSink]:
         sink_handlers = set()
         for sink in targets:
             if TYPE_WILDCARD in sink.accepts or type in sink.accepts:
