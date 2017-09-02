@@ -395,7 +395,7 @@ class DataPipeline(object):
         context[PipelineContext.Keys.PIPELINE] = self
         return context
 
-    def get(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None) -> T:
+    def get(self, type: Type[T], query: Mapping[str, Any]) -> T:
         """Gets a query from the data pipeline.
 
         1) Extracts the query the sequence of data sources.
@@ -425,8 +425,7 @@ class DataPipeline(object):
             raise NoConversionError("No source can provide \"{type}\"".format(type=type.__name__))
 
         LOGGER.info("Creating new PipelineContext")
-        if context is None:
-            context = self._new_context()
+        context = self._new_context()
 
         LOGGER.info("Querying SourceHandlers for \"{type}\"".format(type=type.__name__))
         for handler in handlers:
@@ -437,7 +436,7 @@ class DataPipeline(object):
 
         raise NotFoundError("No source returned a query result!")
 
-    def get_many(self, type: Type[T], query: Mapping[str, Any], context: PipelineContext = None, streaming: bool = False) -> Iterable[T]:
+    def get_many(self, type: Type[T], query: Mapping[str, Any], streaming: bool = False) -> Iterable[T]:
         """Gets a query from the data pipeline, which contains a request for multiple objects.
 
         1) Extracts the query the sequence of data sources.
@@ -468,8 +467,7 @@ class DataPipeline(object):
             raise NoConversionError("No source can provide \"{type}\"".format(type=type.__name__))
 
         LOGGER.info("Creating new PipelineContext")
-        if context is None:
-            context = self._new_context()
+        context = self._new_context()
 
         LOGGER.info("Querying SourceHandlers for \"{type}\"".format(type=type.__name__))
         for handler in handlers:
