@@ -68,7 +68,7 @@ def _build_type_graph(sources: Iterable[DataSource], sinks: Iterable[DataSink], 
 
                 # Only the cheapest conversion between two types is stored. Replace it if this one is cheaper.
                 try:
-                    current_transformer = graph.edge[from_type][to_type][_TRANSFORMER]
+                    current_transformer = graph.adj[from_type][to_type][_TRANSFORMER]
                     cheapest_transformer = transformer if transformer.cost < current_transformer.cost else current_transformer
                 except KeyError:
                     cheapest_transformer = transformer
@@ -299,7 +299,7 @@ class DataPipeline(object):
         chain = []
         cost = 0
         for source, target in _pairwise(path):
-            transformer = self._type_graph.edge[source][target][_TRANSFORMER]
+            transformer = self._type_graph.adj[source][target][_TRANSFORMER]
             chain.append((transformer, target))
             cost += transformer.cost
         LOGGER.info("Built transformer chain from \"{source_type}\" to \"{target_type}\"".format(source_type=source_type.__name__, target_type=target_type.__name__))
