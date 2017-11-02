@@ -309,7 +309,7 @@ class DataPipeline(object):
 
         return partial(_transform, transformer_chain=chain), cost
 
-    def _best_transform_from(self, source_type: Type[S], target_types: Iterable[Type]) -> Tuple[Callable[[S], Any], Type]:
+    def _best_transform_from(self, source_type: Type[S], target_types: Iterable[Type]) -> Tuple[Callable[[S], Any], Type, int]:
         best = None
         best_cost = _MAX_TRANSFORM_COST
         to_type = None
@@ -324,9 +324,9 @@ class DataPipeline(object):
                 pass
         if best is None:
             raise NoConversionError("Pipeline can't convert \"{source_type}\" to any of \"{target_types}\"".format(source_type=source_type, target_types=target_types))
-        return best, to_type
+        return best, to_type, best_cost
 
-    def _best_transform_to(self, target_type: Type[T], source_types: Iterable[Type]) -> Tuple[Callable[[T], Any], Type]:
+    def _best_transform_to(self, target_type: Type[T], source_types: Iterable[Type]) -> Tuple[Callable[[T], Any], Type, int]:
         best = None
         best_cost = _MAX_TRANSFORM_COST
         from_type = None
@@ -341,7 +341,31 @@ class DataPipeline(object):
                 pass
         if best is None:
             raise NoConversionError("Pipeline can't convert from any of \"{source_types}\" to \"{target_type}\"".format(source_types=source_types, target_type=target_type))
-        return best, from_type
+        return best, from_type, best_cost
+
+    def _create_sink_handlers_simultaneously(self, before: Type[T], transform: DataTransformer, after: Type[T], targets: Iterable[DataSink]):
+        before_transform_handlers = set()
+        after_transform_handlers = set()
+        for sink in targets:
+            try:
+                before_transformer, before_to_type, before_cost = self._best_transform_from(before, sink.accepts)
+            except NoConversionError:
+                before_transformer = None
+            try:
+                after_transformer, after_to_type, after_cost = self._best_transform_from(after, sink.accepts)
+            except:
+                after_transformer = None
+
+            if before_transformer is not None and after_transformer is not None:
+                if before_cost < after_cost:
+                    before_transform_handlers.add(_SinkHandler(sink, before_to_type, before_transformer))
+                else:
+                    after_transform_handlers.add(_SinkHandler(sink, after_to_type, after_transformer))
+            elif before_transformer is not None:
+                before_transform_handlers.add(_SinkHandler(sink, before_to_type, before_transformer))
+            elif after_transformer is not None:
+                after_transform_handlers.add(_SinkHandler(sink, after_to_type, after_transformer))
+        return before_transform_handlers, after_transform_handlers
 
     def _create_sink_handlers(self, type: Type[T], targets: Iterable[DataSink]) -> Set[DataSink]:
         sink_handlers = set()
@@ -350,7 +374,7 @@ class DataPipeline(object):
                 sink_handlers.add(_SinkHandler(sink, type, _identity))
             else:
                 try:
-                    transform, store_type = self._best_transform_from(type, sink.accepts)
+                    transform, store_type, cost = self._best_transform_from(type, sink.accepts)
                     sink_handlers.add(_SinkHandler(sink, store_type, transform))
                 except NoConversionError:
                     pass
@@ -365,9 +389,11 @@ class DataPipeline(object):
                 source_handlers.append(_SourceHandler(source, type, _identity, {sink_handler: False for sink_handler in sink_handlers}))
             else:
                 try:
-                    transform, source_type = self._best_transform_to(type, source.provides)
-                    sink_handlers = {sink_handler: False for sink_handler in self._create_sink_handlers(source_type, targets)}
-                    sink_handlers.update({sink_handler: True for sink_handler in self._create_sink_handlers(type, targets)})
+                    transform, source_type, cost = self._best_transform_to(type, source.provides)
+                    # If we got past the above function call, then there is a transformer from `source_type` to `type`
+                    pre_handlers, post_handlers = self._create_sink_handlers_simultaneously(source_type, transform, type, targets)
+                    sink_handlers = {sink_handler: False for sink_handler in pre_handlers}
+                    sink_handlers.update({sink_handler: True for sink_handler in post_handlers})
                     source_handlers.append(_SourceHandler(source, source_type, transform, sink_handlers))
                 except NoConversionError:
                     pass
