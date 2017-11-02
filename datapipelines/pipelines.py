@@ -353,7 +353,7 @@ class DataPipeline(object):
                 before_transformer = None
             try:
                 after_transformer, after_to_type, after_cost = self._best_transform_from(after, sink.accepts)
-            except:
+            except NoConversionError:
                 after_transformer = None
 
             if before_transformer is not None and after_transformer is not None:
