@@ -1,4 +1,4 @@
 flake8
 pytest
-merakicommons
+merakicommons>=1.0.6
 networkx

@@ -44,8 +44,12 @@ class DataTransformer(ABC):
         dispatcher = singledispatch(method)
         transforms = {}
 
+        dispatch_types = {}
+
         def wrapper(self: Any, target_type: Type[T], value: F, context: PipelineContext = None) -> T:
-            call = dispatcher.dispatch(TypePair[value.__class__, target_type])
+            dispatch_type_name = f"{value.__class__.__name__} -> {target_type.__name__}"
+            dispatch_type = dispatch_types[dispatch_type_name]
+            call = dispatcher.dispatch(dispatch_type)
             try:
                 return call(self, value, context=context)
             except TypeError:
@@ -59,7 +63,10 @@ class DataTransformer(ABC):
                 transforms[from_type] = target_types
             target_types.add(to_type)
 
-            return dispatcher.register(TypePair[from_type, to_type])
+            dispatch_type_name = f'{from_type.__name__} -> {to_type.__name__}'
+            new_type = type(dispatch_type_name, (object,), {})
+            dispatch_types[dispatch_type_name] = new_type
+            return dispatcher.register(new_type)
 
         wrapper.register = register
         wrapper._transforms = transforms

@@ -162,12 +162,14 @@ class _TypeNode(_ValidationNode):
         try:
             value = query[self.key]
             for type in self.types:
+                if hasattr(type, '__origin__'):  # The typing module contains a reference to the actual type via __origin__. Get that actual type for use in `issubclass`.
+                    type = type.__origin__
                 if issubclass(type, Enum) and isinstance(value, str):
                     value = type(value)
                 if isinstance(value, type):
                     query[self.key] = value
                     return True
-            raise WrongValueTypeError("{key} must be of type {type} in query!".format(key=self.key, type=self))
+            raise WrongValueTypeError("{key} must be of type {type} in query! Got {badtype}.".format(key=self.key, type=self, badtype=type(value)))
         except KeyError:
             if self.child:
                 self.child.evaluate(query, context)
