@@ -1,3 +1,4 @@
+import sys
 from abc import ABC, abstractmethod
 from enum import Enum
 from copy import deepcopy
@@ -162,7 +163,7 @@ class _TypeNode(_ValidationNode):
         try:
             value = query[self.key]
             for type in self.types:
-                if hasattr(type, '__origin__'):  # The typing module contains a reference to the actual type via __origin__. Get that actual type for use in `issubclass`.
+                if sys.version_info.minor >= 7 and hasattr(type, '__origin__'):  # The typing module contains a reference to the actual type via __origin__. Get that actual type for use in `issubclass`. This only works for python 3.7+, not 3.6 or below.
                     type = type.__origin__
                 if issubclass(type, Enum) and isinstance(value, str):
                     value = type(value)
