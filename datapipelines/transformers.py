@@ -52,8 +52,8 @@ class DataTransformer(ABC):
             call = dispatcher.dispatch(dispatch_type)
             try:
                 return call(self, value, context=context)
-            except TypeError:
-                raise DataTransformer.unsupported(target_type, value)
+            except TypeError as error:
+                raise DataTransformer.unsupported(target_type, value) from error
 
         def register(from_type: Type[F], to_type: Type[T]) -> Callable[[Any, Type[T], F, PipelineContext], T]:
             try:

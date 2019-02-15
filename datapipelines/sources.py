@@ -67,8 +67,8 @@ class DataSource(ABC):
             call = dispatcher.dispatch(type)
             try:
                 return call(self, query, context=context)
-            except TypeError:
-                raise DataSource.unsupported(type)
+            except TypeError as error:
+                raise DataSource.unsupported(type) from error
 
         def register(type: Type[T]) -> Callable[[Any, Type[T], Mapping[str, Any], PipelineContext], Any]:
             provides.add(type)

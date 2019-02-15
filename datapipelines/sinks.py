@@ -60,8 +60,8 @@ class DataSink(ABC):
             call = dispatcher.dispatch(type)
             try:
                 return call(self, items, context=context)
-            except TypeError:
-                raise DataSink.unsupported(type)
+            except TypeError as error:
+                raise DataSink.unsupported(type) from error
 
         def register(type: Type[T]) -> Callable[[Any, Type[T], Any, PipelineContext], None]:
             accepts.add(type)
